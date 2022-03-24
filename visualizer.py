@@ -54,3 +54,5 @@ class Plotter:
     def plot_stage_transitions(self, ax):
         ax.axvline(x=self.sol.time_of_birth, linestyle=':', color='k')
         ax.axvline(x=self.sol.time_of_puberty, linestyle=':', color='k')
+        if self.sol.time_of_weaning:
+            ax.axvline(x=self.sol.time_of_weaning, linestyle=':', color='k')
