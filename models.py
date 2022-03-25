@@ -125,6 +125,7 @@ class STX(STD):
             setattr(organism, 'f_milk', 1)
         if not hasattr(organism, 'E_density_mother'):
             setattr(organism, 'E_density_mother', organism.E_m)
+        setattr(organism, 'E_0', organism.E_density_mother * organism.V_0)
         super().__init__(organism)
 
     def state_changes(self, t, state_vars):
@@ -143,7 +144,7 @@ class STX(STD):
             if t < self.organism.t_0:  # Gestation doesn't start until t=t_0
                 dE, dV, dE_H, dE_R = 0, 0, 0, 0
             else:
-                dE = self.organism.v * self.organism.E_density_mother * V ** (2 / 3)
+                dE = self.organism.v * self.organism.E_density_mother * (V ** (2 / 3))
                 dV = p_G / self.organism.E_G
                 dE_H = p_R
                 dE_R = 0
@@ -181,16 +182,16 @@ class STX(STD):
 
     def p_G(self, p_C, p_S, V, E_H):
         if type(E_H) == np.ndarray:
-            p_R = np.zeros_like(E_H)
+            p_G = np.zeros_like(E_H)
             for i, (maturity, mobil, soma_maint, structure) in enumerate(zip(E_H, p_C, p_S, V)):
                 if maturity < self.organism.E_Hb:  # Organism is a foetus
-                    p_R[i] = self.organism.E_G * self.organism.v * structure ** (2 / 3)
+                    p_G[i] = self.organism.E_G * self.organism.v * (structure ** (2 / 3))
                 else:
-                    p_R[i] = self.organism.kappa * mobil - soma_maint
-            return p_R
+                    p_G[i] = self.organism.kappa * mobil - soma_maint
+            return p_G
         else:
             if E_H < self.organism.E_Hb:
-                return self.organism.E_G * self.organism.v * V ** (2 / 3)
+                return self.organism.E_G * self.organism.v * (V ** (2 / 3))
             else:
                 return self.organism.kappa * p_C - p_S
 
@@ -214,7 +215,7 @@ class Solution:
     def __init__(self, model):
         self.model_type = type(model).__name__
 
-        self.animal = model.organism
+        self.organism = model.organism
 
         self.t = model.sol.t
         self.E = model.sol.y[0]
@@ -233,11 +234,11 @@ class Solution:
 
     def calculate_stage_transitions(self):
         for t, E_H in zip(self.t, self.E_H):
-            if not self.time_of_birth and E_H > self.animal.E_Hb:
+            if not self.time_of_birth and E_H > self.organism.E_Hb:
                 self.time_of_birth = t
-            elif not self.time_of_weaning and hasattr(self.animal, 'E_Hx') and E_H > self.animal.E_Hx:
+            elif not self.time_of_weaning and hasattr(self.organism, 'E_Hx') and E_H > self.organism.E_Hx:
                 self.time_of_weaning = t
-            elif not self.time_of_puberty and E_H > self.animal.E_Hp:
+            elif not self.time_of_puberty and E_H > self.organism.E_Hp:
                 self.time_of_puberty = t
 
     def calculate_powers(self, model):

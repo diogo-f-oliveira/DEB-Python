@@ -2,8 +2,8 @@ import numpy as np
 
 
 class Organism:
-    def __init__(self, E_G, P_Am, v, P_M, kappa, k_J, kap_R, E_Hb, E_Hp, kap_X=0.8, kap_P=0.1, E_0=1e6, mu_X=525_000,
-                 mu_E=550_000, mu_P=480_000, d_V=0.2, w_V=23.9295, **additional_parameters):
+    def __init__(self, E_G, P_Am, v, P_M, kappa, k_J, kap_R, E_Hb, E_Hp, kap_X=0.8, kap_P=0.1, E_0=1e6, V_0=1e-12,
+                 mu_X=525_000, mu_E=550_000, mu_P=480_000, d_V=0.2, w_V=23.9295, **additional_parameters):
         self.E_G = E_G  # Specific cost for structure (J/cm^3)
         self.P_Am = P_Am  # Surface-specific maximum assimilation rate (J/d.cm^2)
         self.v = v  # Energy conductance (cm/d)
@@ -14,6 +14,7 @@ class Organism:
         self.E_Hb = E_Hb  # Maturity at birth (J)
         self.E_Hp = E_Hp  # Maturity at puberty (J)
         self.E_0 = E_0  # Initial reserve (J)
+        self.V_0 = V_0  # Initial structure (cm^3)
         self.kap_X = kap_X  # Digestion efficiency (-)
         self.kap_P = kap_P  # Defecation efficiency (-)
         self.mu_X = mu_X
@@ -56,5 +57,7 @@ animals = {
     'shark': dict(E_G=5212.32, P_Am=558.824, v=0.02774, P_M=34.3632, kappa=0.84851, k_J=0.002, kap_R=0.95, E_Hb=7096,
                   E_Hp=300600, E_0=174_619),
     'muskox': dict(E_G=7842.44, P_Am=1053.62, v=0.13958, P_M=18.4042, kappa=0.82731, k_J=0.00087827, kap_R=0.95,
-                   E_Hb=1.409e+7, E_Hp=3.675e+8, E_Hx=5.136e+07, t_0=18.2498, f_milk=1)
+                   E_Hb=1.409e+7, E_Hp=3.675e+8, E_Hx=5.136e+7, t_0=18.2498, f_milk=1),
+    'human': dict(E_G=7879.55, P_Am=118.992, v=0.031461, P_M=2.5826, kappa=0.78656, k_J=0.00026254, kap_R=0.95,
+                   E_Hb=4.81e+6, E_Hp=8.726e+7, E_Hx=1.346e+7, t_0=26.8217, f_milk=1)
 }

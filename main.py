@@ -3,8 +3,11 @@ import models
 from visualizer import Plotter
 
 if __name__ == '__main__':
-    shark = organism.Organism(**organism.animals['muskox'])
-    model = models.STX(shark)
+    # shark = organism.Organism(**organism.animals['shark'])
+    # model = models.STD(shark)
+
+    muskox = organism.Organism(**organism.animals['muskox'])
+    model = models.STX(muskox)
 
     model.solve(food_function=lambda t: 1, t_span=(0, 20000), step_size='auto', initial_state='birth')
 
