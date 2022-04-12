@@ -236,8 +236,9 @@ class Solution:
         for t, E_H in zip(self.t, self.E_H):
             if not self.time_of_birth and E_H > self.organism.E_Hb:
                 self.time_of_birth = t
-            elif not self.time_of_weaning and hasattr(self.organism, 'E_Hx') and E_H > self.organism.E_Hx:
-                self.time_of_weaning = t
+            elif not self.time_of_weaning and hasattr(self.organism, 'E_Hx'):
+                if E_H > self.organism.E_Hx:
+                    self.time_of_weaning = t
             elif not self.time_of_puberty and E_H > self.organism.E_Hp:
                 self.time_of_puberty = t
 
