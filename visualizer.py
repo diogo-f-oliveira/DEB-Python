@@ -3,6 +3,11 @@ from models import Solution
 
 
 class Plotter:
+    """
+    class Plotter:
+
+    Plots the evolution of a Pet from the result of a simulation.
+    """
     label_fontsize = 16
     title_fontsize = 20
 
