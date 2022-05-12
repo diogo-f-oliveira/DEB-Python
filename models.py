@@ -26,6 +26,10 @@ class STD:
         # Check that organism is a Pet class
         elif not isinstance(organism, Pet):
             raise Exception("Input must be of class Pet or a dictionary of parameters to create a Pet class.")
+
+        # Check validity of parameters of Pet
+        if not organism.check_validity():
+            raise Exception("Parameter values of Pet are not valid.")
         self.organism = organism
         self.sol = None  # Output from integration of state equations
         self.food_function = None  # Function of scaled functional feeding response (f) over time
@@ -229,6 +233,7 @@ class STD:
 
 
 class STX(STD):
+    # TODO: Check validity of Pet function (take code from __init__)
     """
     class STX:
 
@@ -254,12 +259,23 @@ class STX(STD):
         elif not isinstance(organism, Pet):
             raise Exception("Input must be of class Pet or a dictionary of parameters to create a Pet class.")
 
+        # Check validity of parameters of Pet
+        if not organism.check_validity():
+            raise Exception("Parameter values of Pet are not valid.")
+
         # Check that the Pet class has parameters t_0 and E_Hx defined
         if not hasattr(organism, 't_0') or not hasattr(organism, 'E_Hx'):
             raise Exception('The organism is not compatible with model STX: parameters t_0 and E_Hx are required.')
+        elif organism.t_0 <= 0:
+            raise Exception("The time until gestation can't be negative.")  # TODO: Write the parameter name properly
+        elif organism.E_Hx <= organism.E_Hb or organism.E_Hx >= organism.E_Hp:
+            raise Exception("The weaning maturity level must be larger than the maturity at birth and smaller than "
+                            "maturity at puberty.")
         # Set f_milk to 1 if it is not defined
         if not hasattr(organism, 'f_milk'):
             setattr(organism, 'f_milk', 1)
+        elif organism.f_milk <= 0:
+            raise Exception("The parameter f_milk must be positive")  # TODO: Write the exception text properly
         # Set the energy density of the mother to the maximum energy density
         if not hasattr(organism, 'E_density_mother'):
             setattr(organism, 'E_density_mother', organism.E_m)
@@ -388,6 +404,8 @@ class STX(STD):
 
 
 class Solution:
+    # TODO: Have Solution class update whilst simulation is running
+    # TODO: Keep track of maximum values of quantities of interest
     """
     Solution class:
 

@@ -3,6 +3,9 @@ from math import exp
 
 
 class Pet:
+    # TODO: Better input structure of parameters
+    # TODO: Include chemical variables as inputs
+    # TODO: __str__ method for Pet description
     """
     class Pet:
 
@@ -21,8 +24,9 @@ class Pet:
     temperature_affected = ('P_Am', 'v', 'P_M', 'P_T', 'k_J')
 
     def __init__(self, E_G, P_Am, v, P_M, kappa, k_J, kap_R, E_Hb, E_Hp, P_T=0, kap_X=0.8, kap_P=0.1, E_0=1e6,
-                 V_0=1e-12, mu_X=525_000, mu_E=550_000, mu_P=480_000, d_V=0.2, w_V=23.9295, T_A=8000, T_ref=293.15,
-                 T=310.85, **additional_parameters):
+                 V_0=1e-12, mu_X=525_000, mu_V=500_000, mu_E=550_000, mu_P=480_000, d_V=0.2, w_V=23.9295, T_A=8000,
+                 T_ref=293.15,
+                 T=310.85, n_waste=(1, 2, 1, 2), **additional_parameters):
         self.E_G = E_G  # Specific cost for Structure (J/cm^3)
         self._P_Am = P_Am  # Surface-specific maximum assimilation rate (J/d.cm^2)
         self._v = v  # Energy conductance (cm/d)
@@ -40,16 +44,23 @@ class Pet:
         self.T_A = T_A  # Arrhenius temperature (K)
         self.T_ref = T_ref  # Reference temperature (K)
         self.T = T  # Temperature correction factor (K)
-        self.mu_X = mu_X  # Chemical potential of Food (J/mol)
-        self.mu_E = mu_E  # Chemical potential of Reserve (J/mol)
-        self.mu_P = mu_P  # Chemical potential of Faeces (J/mol)
+        self.mu_X = mu_X  # Chemical potential of Food X (J/mol)
+        self.mu_V = mu_V  # Chemical potential of Structure V (J/mol)
+        self.mu_E = mu_E  # Chemical potential of Reserve E (J/mol)
+        self.mu_P = mu_P  # Chemical potential of Feces P (J/mol)
         self.d_V = d_V  # Specific density of Structure (g/cm^3)
         self.w_V = w_V  # Molecular weight of Structure (g/mol)
 
-        # Chemical indices of mineral compounds
-        self.nM = np.array([[1, 0, 0, 1], [0, 2, 0, 2], [2, 1, 2, 1], [0, 0, 0, 2]])
-        # Chemical indices of organic compounds
-        self.nO = np.array([[1, 1, 1, 1], [1.8, 1.8, 1.8, 1.8], [0.5, 0.5, 0.5, 0.5], [0.15, 0.15, 0.15, 0.15]])
+        # Chemical indices of mineral compounds (CO2, H20, O2, N-Waste)
+        self.nM = np.array([[1, 0, 0, n_waste[0]],
+                            [0, 2, 0, n_waste[1]],
+                            [2, 1, 2, n_waste[2]],
+                            [0, 0, 0, n_waste[3]]])
+        # Chemical indices of organic compounds (X, V, E, P)
+        self.nO = np.array([[1, 1, 1, 1],
+                            [1.8, 1.8, 1.8, 1.8],
+                            [0.5, 0.5, 0.5, 0.5],
+                            [0.15, 0.15, 0.15, 0.15]])
 
         # Set any extra parameters that are not required for the STD model
         for name, value in additional_parameters.items():
@@ -57,18 +68,43 @@ class Pet:
 
     @property
     def E_m(self):
-        """Computes the maximum energy density (J/cm^3)."""
+        """Maximum energy density (J/cm^3)."""
         return self.P_Am / self.v
 
     @property
     def g(self):
-        """Computes the energy investment ratio (-)."""
+        """Energy investment ratio (-)."""
         return self.E_G / (self.kappa * self.E_m)
 
     @property
     def k_M(self):
-        """Computes the somatic maintenance rate coefficient (d^-1)."""
+        """Somatic maintenance rate coefficient k_M (d^-1)."""
         return self._P_M / self.E_G * self.TC
+
+    @property
+    def k(self):
+        """Maintenance ratio (-)."""
+        return self._k_J / self._k_M
+
+    @property
+    def L_m(self):
+        """Maximum length L_m (cm)."""
+        return self.kappa * self._P_Am / self._P_M
+
+    @property
+    def kap_G(self):
+        """Growth efficiency (-)."""
+        return self.mu_V * self.M_V / self.E_G
+
+    @property
+    def M_V(self):
+        """Volume-specific mass of structure (mol/cm^3)."""
+        return self.d_V / self.w_V
+
+    @property
+    def p_Xm(self):
+        """Specific maximum ingestion rate (J/d.cm^2)"""
+        return self.p_Am / self.kap_X
 
     @property
     def eta_O(self):
@@ -80,13 +116,35 @@ class Pet:
 
     @property
     def eta_M(self):
-        """Computes the  matrix of coefficients that couple mass fluxes of mineral compounds to energy fluxes."""
+        """Computes the matrix of coefficients that couple mass fluxes of mineral compounds to energy fluxes."""
         return -np.linalg.inv(self.nM) @ self.nO @ self.eta_O
 
     @property
     def TC(self):
-        """Computes the temperature correction factor TC (-)."""
+        """Temperature correction factor TC (-)."""
         return exp(self.T_A / self.T_ref - self.T_A / self.T)
+
+    def check_validity(self):
+        """
+        Checks that the parameters of the Pet are within the allowable part of the parameter space of the standard DEB
+        model.
+        :return: true if the parameters are valid, false otherwise
+        """
+        # All parameters must be positive
+        if self.kap_P < 0 or self.kap_X < 0 or self._P_M < 0 or self._P_Am < 0 or self._v < 0 or self._P_T < 0 or \
+                self.kappa < 0 or self.E_G < 0 or self._k_J < 0 or self.E_Hb < 0 or self.E_Hp < 0 or self.kap_R < 0 or \
+                self.T_A < 0:
+            return False
+        # Maturity at puberty must be higher than maturity at birth
+        if self.E_Hb >= self.E_Hp:
+            return False
+        # Efficiencies must be lower than one
+        if self.kap_X >= 1 or self.kap_P >= 1 or self.kap_R >= 1 or self.kap_G >= 1 or self.kappa >= 1:
+            return False
+        # Constraint to reach puberty
+        if (1 - self.kappa) * self._p_Am * (self.L_m ** 2) > self._k_J * self.E_Hp:
+            return False
+        return True
 
     def __getattr__(self, item):
         """Returns the value of temperature affected parameters corrected with the temperature correction factor TC.
@@ -95,6 +153,10 @@ class Pet:
             return getattr(self, f'_{item}') * self.TC
         else:
             raise AttributeError  # Ensures that the behaviour for undefined parameters works as expected
+
+    def __str__(self):
+        for name, value in self.__dict__.items():
+            print(f"{name}: {value}")
 
 
 # Dictionary with parameters for several organisms. Usage with Pet class is: Pet(**animals[pet_name])

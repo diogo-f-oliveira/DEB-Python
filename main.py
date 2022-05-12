@@ -8,6 +8,7 @@ if __name__ == '__main__':
 
     # Get parameters of muskox from animals dictionary
     muskox = pet.Pet(**pet.animals['muskox'])
+    # print(muskox)
     # Initialize model STX for muskox
     model = models.STX(muskox)
 
