@@ -434,6 +434,8 @@ class Solution:
         self.time_of_puberty = None
         self.calculate_stage_transitions()
 
+        self.calculate_real_variables()
+
     def calculate_stage_transitions(self):
         """Calculates the time step of life stage transitions."""
         for t, E_H in zip(self.t, self.E_H):
@@ -463,3 +465,6 @@ class Solution:
             self.p_J = model.p_J(self.E_H)
             self.p_R = model.p_R(self.p_C, self.p_J, self.p_S, self.p_G, self.E_H)
             self.p_D = model.p_D(self.p_S, self.p_J, self.p_R, self.E_H)
+
+    def calculate_real_variables(self):
+        self.physical_length = self.organism.convert_to_physical_length(self.V)
