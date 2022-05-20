@@ -5,7 +5,7 @@ class Compound:
     ATOMS = ['C', 'H', 'O', 'N']
     MOLECULAR_WEIGHTS = [12, 1, 16, 14]
 
-    def __init__(self, n, d, mu, h, name):
+    def __init__(self, n, d, mu, h, name, chemical_formula=None):
         if len(n) != len(self.ATOMS):
             raise Exception("Chemical indices must be have length 4 corresponding to (C, H, O, N)")
         if not isinstance(n, np.ndarray):
@@ -18,9 +18,13 @@ class Compound:
         self.w = np.dot(n, self.MOLECULAR_WEIGHTS)  # Molecular weight (g/mol) or (g/C-mol)
 
         self.name = name
+        if chemical_formula is not None:
+            self._chemical_formula = chemical_formula
 
     @property
     def chemical_formula(self):
+        if self._chemical_formula is not None:
+            return self._chemical_formula
         string = ''
         for atom, chem_index in zip(self.ATOMS, self.n):
             if chem_index == 1:
@@ -47,7 +51,7 @@ class Compound:
 
     @classmethod
     def urea(cls):
-        return cls(n=(1, 4, 1, 2), d=0.1, mu=0, h=0, name='Urea')
+        return cls(n=(1, 4, 1, 2), d=0.1, mu=0, h=0, name='Urea', chemical_formula='CH(NH2)2')
 
     @classmethod
     def ammonia(cls):
@@ -112,6 +116,14 @@ class Composition:
     @property
     def n_M(self):
         return np.array([self.C.n, self.H.n, self.O.n, self.N.n]).T
+
+    @property
+    def h_O(self):
+        return np.array([self.X.h, self.V.h, self.E.h, self.P.h])
+
+    @property
+    def h_M(self):
+        return np.array([self.C.h, self.H.h, self.O.h, self.N.h])
 
 
 if __name__ == '__main__':

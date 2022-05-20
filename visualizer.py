@@ -44,6 +44,13 @@ class Plotter:
 
         fig.show()
 
+    def plot_entropy_generation(self):
+        fig, axes = plt.subplots(figsize=(16, 9), tight_layout=True, num="Entropy Generation")
+
+        self.plot_vs_time(axes, self.sol.entropy, 'Entropy Generation', 'J/K')
+
+        fig.show()
+
     def plot_real_variables(self):
         fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(16, 9), tight_layout=True, num="Real Variables")
 

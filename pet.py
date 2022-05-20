@@ -24,7 +24,8 @@ class Pet:
     """
     temperature_affected = ('P_Am', 'v', 'P_M', 'P_T', 'k_J')
 
-    def __init__(self, E_G, P_Am, v, P_M, kappa, k_J, kap_R, E_Hb, E_Hp, comp=None, P_T=0, kap_X=0.8, kap_P=0.1, E_0=1e6,
+    def __init__(self, E_G, P_Am, v, P_M, kappa, k_J, kap_R, E_Hb, E_Hp, comp=None, P_T=0, kap_X=0.8, kap_P=0.1,
+                 E_0=1e6,
                  V_0=1e-12, T_A=8000, T_ref=293.15, T=310.85, del_M=1, **additional_parameters):
         self.E_G = E_G  # Specific cost for Structure (J/cm^3)
         self._P_Am = P_Am  # Surface-specific maximum assimilation rate (J/d.cm^2)
@@ -60,6 +61,64 @@ class Pet:
         # Set any extra parameters that are not required for the STD model
         for name, value in additional_parameters.items():
             setattr(self, name, value)
+
+    def check_validity(self):
+        """
+        Checks that the parameters of the Pet are within the allowable part of the parameter space of the standard DEB
+        model.
+        :return: true if the parameters are valid, false otherwise
+        """
+        # All parameters must be positive
+        if self.kap_P < 0 or self.kap_X < 0 or self._P_M < 0 or self._P_Am < 0 or self._v < 0 or self._P_T < 0 or \
+                self.kappa < 0 or self.E_G < 0 or self._k_J < 0 or self.E_Hb < 0 or self.E_Hp < 0 or self.kap_R < 0 or \
+                self.T_A < 0:
+            return False
+        # Maturity at puberty must be higher than maturity at birth
+        if self.E_Hb >= self.E_Hp:
+            return False
+        # Efficiencies must be lower than one
+        if self.kap_X >= 1 or self.kap_P >= 1 or self.kap_R >= 1 or self.kap_G >= 1 or self.kappa >= 1:
+            return False
+        # Constraint to reach puberty
+        # TODO: Check this constraint is correct
+        # if (1 - self.kappa) * self._p_Am * (self.L_m ** 2) < self._k_J * self.E_Hp:
+        #     return False
+        return True
+
+    def convert_to_physical_length(self, V):
+        return V ** (1 / 3) / self.del_M
+
+    def __getattr__(self, item):
+        """Returns the value of temperature affected parameters corrected with the temperature correction factor TC.
+        Has no effect on other parameters."""
+        if item in self.temperature_affected:
+            return getattr(self, f'_{item}') * self.TC
+        else:
+            raise AttributeError  # Ensures that the behaviour for undefined parameters works as expected
+
+    def __str__(self):
+        # for name, value in self.__dict__.items():
+        #     print(f"{name}: {value}")
+        return
+
+    def aggregated_chemical_reactions(self):
+        assimilation = f'{self.gamma_O[0, 0]:.4} X + {self.gamma_M[2, 0]:.4} O2 -> E + {-self.gamma_M[0, 0]:.4} CO2 ' \
+                       f'+ {-self.gamma_M[1, 0]:.4} H20 + {-self.gamma_M[3, 0]:.4} {self.comp.N.chemical_formula} + ' \
+                       f'{-self.gamma_O[3, 0]:.4} P'
+
+        dissipation = f'E + {self.gamma_M[2, 1]:.4} O2 ->  {-self.gamma_M[0, 1]:.4} CO2 + {-self.gamma_M[1, 1]:.4} H20 ' \
+                      f'+ {-self.gamma_M[3, 1]:.4} {self.comp.N.chemical_formula}'
+
+        growth = f'E + {self.gamma_M[2, 2]:.4} O2 ->  {-self.gamma_O[1, 2]:.4} V + {-self.gamma_M[0, 2]:.4} CO2 + ' \
+                 f'{-self.gamma_M[1, 2]:.4} H20 + {-self.gamma_M[3, 2]:.4} {self.comp.N.chemical_formula}'
+
+        return {'assimilation': assimilation, 'dissipation': dissipation, 'growth': growth}
+
+    def print_reactions(self):
+        reactions = self.aggregated_chemical_reactions()
+
+        for reaction_name, formula in reactions.items():
+            print(f"{reaction_name.capitalize()}: {formula}")
 
     @property
     def E_m(self):
@@ -119,44 +178,35 @@ class Pet:
         """Temperature correction factor TC (-)."""
         return exp(self.T_A / self.T_ref - self.T_A / self.T)
 
-    def check_validity(self):
-        """
-        Checks that the parameters of the Pet are within the allowable part of the parameter space of the standard DEB
-        model.
-        :return: true if the parameters are valid, false otherwise
-        """
-        # All parameters must be positive
-        if self.kap_P < 0 or self.kap_X < 0 or self._P_M < 0 or self._P_Am < 0 or self._v < 0 or self._P_T < 0 or \
-                self.kappa < 0 or self.E_G < 0 or self._k_J < 0 or self.E_Hb < 0 or self.E_Hp < 0 or self.kap_R < 0 or \
-                self.T_A < 0:
-            return False
-        # Maturity at puberty must be higher than maturity at birth
-        if self.E_Hb >= self.E_Hp:
-            return False
-        # Efficiencies must be lower than one
-        if self.kap_X >= 1 or self.kap_P >= 1 or self.kap_R >= 1 or self.kap_G >= 1 or self.kappa >= 1:
-            return False
-        # Constraint to reach puberty
-        # TODO: Check this constraint is correct
-        # if (1 - self.kappa) * self._p_Am * (self.L_m ** 2) < self._k_J * self.E_Hp:
-        #     return False
-        return True
+    @property
+    def y_XE(self):
+        """Yield of food on reserve (-)."""
+        return self.comp.E.mu / (self.comp.X.mu * self.kap_X)
 
-    def convert_to_physical_length(self, V):
-        return V ** (1/3) / self.del_M
+    @property
+    def y_PE(self):
+        """Yield of feces on reserve (-)."""
+        return self.y_XE * self.kap_P * self.comp.X.mu / self.comp.P.mu
 
-    def __getattr__(self, item):
-        """Returns the value of temperature affected parameters corrected with the temperature correction factor TC.
-        Has no effect on other parameters."""
-        if item in self.temperature_affected:
-            return getattr(self, f'_{item}') * self.TC
-        else:
-            raise AttributeError  # Ensures that the behaviour for undefined parameters works as expected
+    @property
+    def y_VE(self):
+        """Yield of structure on reserve (-)."""
+        return self.comp.E.mu * self.M_V / self.E_G
 
-    def __str__(self):
-        # for name, value in self.__dict__.items():
-        #     print(f"{name}: {value}")
-        return
+    @property
+    def gamma_O(self):
+        """Computes the matrix of stoichiometry coefficients for organic compounds in the assimilation, dissipation and
+        growth aggregated chemical reactions."""
+        return np.array([[self.y_XE, 0, 0],
+                         [0, 0, -self.y_VE],
+                         [-1, 1, 1],
+                         [-self.y_PE, 0, 0]])
+
+    @property
+    def gamma_M(self):
+        """Computes the matrix of stoichiometry coefficients for mineral compounds in the assimilation, dissipation and
+        growth aggregated chemical reactions."""
+        return -np.linalg.inv(self.comp.n_M) @ self.comp.n_O @ self.gamma_O
 
 
 # Dictionary with parameters for several commom organisms. Usage with Pet class is: Pet(**animals[pet_name])

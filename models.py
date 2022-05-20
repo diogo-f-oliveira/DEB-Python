@@ -231,6 +231,15 @@ class STD:
         powers = np.array([p_A, p_D, p_G])
         return self.organism.eta_M @ powers
 
+    def entropy_generation(self, p_A, p_D, p_G):
+        if type(p_A) != np.ndarray:
+            p_A = np.array([p_A])
+            p_D = np.array([p_D])
+            p_G = np.array([p_G])
+        powers = np.array([p_A, p_D, p_G])
+        return -(self.organism.comp.h_M @ np.linalg.inv(self.organism.comp.n_M) @ self.organism.comp.n_O
+                - self.organism.comp.h_O) @ self.organism.gamma_O @ powers / self.organism.T / self.organism.comp.E.mu
+
 
 class STX(STD):
     # TODO: Check validity of Pet function (take code from __init__)
@@ -428,6 +437,7 @@ class Solution:
         self.calculate_powers(model)
 
         self.mineral_fluxes = model.mineral_fluxes(self.p_A, self.p_D, self.p_G)
+        self.entropy = model.entropy_generation(self.p_A, self.p_D, self.p_G)
 
         self.time_of_birth = None
         self.time_of_weaning = None
