@@ -9,8 +9,10 @@ class Plotter:
     Plots the evolution of a Pet from the result of a simulation.
     """
 
-    def __init__(self, model):
-        self.sol = TimeIntervalSol(model)
+    def __init__(self, sol):
+        if not isinstance(sol, TimeIntervalSol):
+            raise Exception("Invalid solution type.")
+        self.sol = sol
 
     def plot_state_vars(self):
         fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(16, 9), tight_layout=True, num="State Variables")

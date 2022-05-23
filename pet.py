@@ -4,7 +4,6 @@ from composition import Composition
 
 
 class Pet:
-    # TODO: __str__ method for Pet description
     """
     class Pet:
 
@@ -22,25 +21,25 @@ class Pet:
     """
     temperature_affected = ('p_Am', 'v', 'p_M', 'p_T', 'k_J')
 
-    def __init__(self, E_G, p_Am, v, p_M, kappa, k_J, kap_R, E_Hb, E_Hp, comp=None, p_T=0, kap_X=0.8, kap_P=0.1,
+    def __init__(self, p_Am, kappa, v, p_M, E_G, k_J, E_Hb, E_Hp, kap_R, comp=None, p_T=0, kap_X=0.8, kap_P=0.1,
                  E_0=1e6, V_0=1e-12, T_A=8000, T_ref=293.15, T=298.15, del_M=1, **additional_parameters):
         self.E_G = E_G  # Specific cost for Structure (J/cm^3)
         self._p_Am = p_Am  # Surface-specific maximum assimilation rate (J/d.cm^2)
         self._v = v  # Energy conductance (cm/d)
         self._p_M = p_M  # Volume-specific somatic maintenance rate (J/d.cm^3)
         self._p_T = p_T  # Surface-specific somatic maintenance rate (J/d.cm^3)
-        self.kappa = kappa  # Allocation to soma (-)
-        self._k_J = k_J  # Maturity maintenance rate coefficient (d^-1)
-        self.kap_R = kap_R  # Reproduction efficiency (-)
+        self.kappa = kappa  # Allocation fraction to soma (-)
+        self._k_J = k_J  # Maturity maintenance rate constant (d^-1)
         self.E_Hb = E_Hb  # Maturity at birth (J)
         self.E_Hp = E_Hp  # Maturity at puberty (J)
+        self.kap_R = kap_R  # Reproduction efficiency (-)
         self.E_0 = E_0  # Initial Reserve (J)
         self.V_0 = V_0  # Initial Structure (cm^3)
         self.kap_X = kap_X  # Digestion efficiency (-)
         self.kap_P = kap_P  # Defecation efficiency (-)
         self.T_A = T_A  # Arrhenius temperature (K)
         self.T_ref = T_ref  # Reference temperature (K)
-        self.T = T  # Temperature correction factor (K)
+        self.T = T  # Temperature (K)
         self.del_M = del_M  # Shape coefficient (-)
 
         # Chemical composition
@@ -61,7 +60,6 @@ class Pet:
 
     def check_validity(self):
         # TODO: return or print the reason for invalidity
-        # TODO: test invalid params
         """
         Checks that the parameters of the Pet are within the allowable part of the parameter space of the standard DEB
         model.
@@ -78,14 +76,22 @@ class Pet:
         # Efficiencies must be lower than one
         if self.kap_X >= 1 or self.kap_P >= 1 or self.kap_R >= 1 or self.kap_G >= 1 or self.kappa >= 1:
             return False
+
+        # Supply stress outside the supply-demand spectrum
+        if self.s_s >= 4 / 27:
+            return False
+        return True
+
+    def check_viability(self):
+        """
+        Checks that the organism is capable of reaching birth and puberty at maximum food level.
+        :return: true if the organism is capable of reaching birth and puberty, false otherwise
+        """
         # Constraint to reach birth
         if (1 - self.kappa) * self._p_Am * (self.L_m ** 2) <= self._k_J * self.E_Hb:
             return False
         # Constraint to reach puberty
         if (1 - self.kappa) * self._p_Am * (self.L_m ** 2) <= self._k_J * self.E_Hp:
-            return False
-        # Supply stress outside the supply-demand spectrum
-        if self.s_s >= 4/27:
             return False
         return True
 
@@ -106,9 +112,22 @@ class Pet:
             raise AttributeError  # Ensures that the behaviour for undefined parameters works as expected
 
     def __str__(self):
-        # for name, value in self.__dict__.items():
-        #     print(f"{name}: {value}")
-        return
+        description = f"Parameters at T={self.T} K\n" \
+                      f"Surface-specific maximum assimilation rate: {self.p_Am:.6} (J/d.cm^2)\n" \
+                      f"Allocation fraction to soma: {self.kappa} (-)\n" \
+                      f"Energy conductance: {self.v:.6} (cm/d)\n" \
+                      f"Volume-specific somatic maintenance rate: {self.p_M:.6} (J/d.cm^3)\n" \
+                      f"Specific cost for structure: {self.E_G} (J/cm^3)\n" \
+                      f"Maturity maintenance rate constant: {self.k_J:.6} (d^-1)\n" \
+                      f"Maturity at birth: {self.E_Hb} (J)\n" \
+                      f"Maturity at puberty: {self.E_Hp} (J)\n" \
+                      f"Reproduction efficiency: {self.kap_R} (-)\n\n" \
+                      f"Chemical Reactions:\n"
+        reactions = self.aggregated_chemical_reactions()
+
+        for reaction_name, formula in reactions.items():
+            description += f"{reaction_name.capitalize()}: {formula}\n"
+        return description
 
     def aggregated_chemical_reactions(self):
         """
@@ -175,7 +194,6 @@ class Pet:
 
     @property
     def eta_O(self):
-        # TODO: Rewrite using the yield coefficients for better understanding
         """Computes the matrix of coefficients that couple mass fluxes of organic compounds to energy fluxes."""
         return np.array([[-1 / (self.kap_X * self.comp.X.mu), 0, 0],
                          [0, 0, self.comp.V.d / (self.E_G * self.comp.V.w)],

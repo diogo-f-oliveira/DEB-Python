@@ -28,21 +28,26 @@ class STD:
         elif not isinstance(organism, Pet):
             raise Exception("Input must be of class Pet or a dictionary of parameters to create a Pet class.")
 
-        # Check validity of parameters of Pet
-        if not organism.check_validity():
-            raise Exception("Parameter values of Pet are not valid.")
+        self.filter_pet(organism)
 
         self.organism = organism
         self.ode_sol = None  # Output from ODE solver
         self.sol = None  # Full solution including powers, fluxes and entropy
         self.food_function = None  # Function of scaled functional feeding response (f) over time
 
+    @staticmethod
+    def filter_pet(organism):
+        # Check validity of parameters of Pet
+        if not organism.check_validity():
+            raise Exception("Parameter values of Pet are not valid.")
+
     def simulate(self, t_span, food_function=1, step_size='auto', initial_state='birth'):
         """
         Integrates state equations over time. The output from the solver is stored in self.ode_sol.
 
         :param food_function: Function of scaled functional feeding response (f) over time. Must be of signature
-            f = food_function(time).
+            f = food_function(time). If a numerical input between 0 and 1 is provided, a food_function for constant
+            scaled functional response is created.
         :param t_span: (t0, tf). Interval of integration. The solver starts at t=t0 and integrates until it reaches
             t=tf.
         :param step_size: Step size of integration. If step_size='auto', the solver will decide the step size. Else
@@ -264,7 +269,6 @@ class STD:
 
 
 class STX(STD):
-    # TODO: Check validity of Pet function (take code from __init__)
     """
     class STX:
 
@@ -290,9 +294,11 @@ class STX(STD):
         elif not isinstance(organism, Pet):
             raise Exception("Input must be of class Pet or a dictionary of parameters to create a Pet class.")
 
-        # Check validity of parameters of Pet
-        if not organism.check_validity():
-            raise Exception("Parameter values of Pet are not valid.")
+        super().__init__(organism)
+
+    def filter_pet(self, organism):
+        # Checks validity of parameters of Pet
+        super().filter_pet(organism)
 
         # Check that the Pet class has parameters t_0 and E_Hx defined
         if not hasattr(organism, 't_0') or not hasattr(organism, 'E_Hx'):
@@ -312,8 +318,6 @@ class STX(STD):
             setattr(organism, 'E_density_mother', organism.E_m)
         # Set initial reserve E_0
         setattr(organism, 'E_0', organism.E_density_mother * organism.V_0)
-
-        super().__init__(organism)
 
     def state_changes(self, t, state_vars):
         """
