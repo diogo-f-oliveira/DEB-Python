@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-from models import Solution
+from solution import TimeIntervalSol
 
 
 class Plotter:
@@ -10,7 +10,7 @@ class Plotter:
     """
 
     def __init__(self, model):
-        self.sol = Solution(model)
+        self.sol = TimeIntervalSol(model)
 
     def plot_state_vars(self):
         fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(16, 9), tight_layout=True, num="State Variables")

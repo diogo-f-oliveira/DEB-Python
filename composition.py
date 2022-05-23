@@ -39,23 +39,23 @@ class Compound:
 
     @classmethod
     def carbon_dioxide(cls):
-        return cls(n=(1, 0, 2, 0), d=0.1, mu=0, h=-393_520, name='Carbon Dioxide')
+        return cls(n=(1, 0, 2, 0), d=0.1, mu=0, h=-393_520, name='Carbon Dioxide', chemical_formula='CO2')
 
     @classmethod
     def water(cls):
-        return cls(n=(0, 2, 1, 0), d=0.1, mu=0, h=-285_830, name='Water')
+        return cls(n=(0, 2, 1, 0), d=0.1, mu=0, h=-285_830, name='Water', chemical_formula='H2O')
 
     @classmethod
     def oxygen(cls):
-        return cls(n=(0, 0, 2, 0), d=0.1, mu=0, h=0, name='Oxygen')
+        return cls(n=(0, 0, 2, 0), d=0.1, mu=0, h=0, name='Oxygen', chemical_formula='O2')
 
     @classmethod
     def urea(cls):
-        return cls(n=(1, 4, 1, 2), d=0.1, mu=0, h=0, name='Urea', chemical_formula='CH(NH2)2')
+        return cls(n=(1, 4, 1, 2), d=0.1, mu=0, h=0, name='Urea', chemical_formula='CO(NH2)2')
 
     @classmethod
     def ammonia(cls):
-        return cls(n=(0, 3, 0, 1), d=0.1, mu=0, h=-46_100, name='Ammonia')
+        return cls(n=(0, 3, 0, 1), d=0.1, mu=0, h=-46_100, name='Ammonia', chemical_formula='NH3')
 
     @classmethod
     def food(cls, n=(1, 1.8, 0.5, 0.15), d=0.1, mu=525_000, h=-117_300):
@@ -98,9 +98,9 @@ class Composition:
     def set_organic_compound(compound, constructor, name):
         if compound is None:
             return constructor()
-        elif isinstance(compound, float):  # Assumes that the value to change is the specific density
+        elif isinstance(compound, (float, int)):  # Assumes that the value to change is the specific density
             return constructor(d=compound)
-        elif isinstance(compound, tuple) or isinstance(compound, list):
+        elif isinstance(compound, (tuple, list)):
             return constructor(*compound)
         elif isinstance(compound, dict):
             return constructor(**compound)

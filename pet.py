@@ -4,8 +4,6 @@ from composition import Composition
 
 
 class Pet:
-    # TODO: Better input structure of parameters
-    # TODO: Include chemical variables as inputs
     # TODO: __str__ method for Pet description
     """
     class Pet:
@@ -22,16 +20,15 @@ class Pet:
         Mass         -> g (grams)
         Nº Molecules -> mol (moles)
     """
-    temperature_affected = ('P_Am', 'v', 'P_M', 'P_T', 'k_J')
+    temperature_affected = ('p_Am', 'v', 'p_M', 'p_T', 'k_J')
 
-    def __init__(self, E_G, P_Am, v, P_M, kappa, k_J, kap_R, E_Hb, E_Hp, comp=None, P_T=0, kap_X=0.8, kap_P=0.1,
-                 E_0=1e6,
-                 V_0=1e-12, T_A=8000, T_ref=293.15, T=310.85, del_M=1, **additional_parameters):
+    def __init__(self, E_G, p_Am, v, p_M, kappa, k_J, kap_R, E_Hb, E_Hp, comp=None, p_T=0, kap_X=0.8, kap_P=0.1,
+                 E_0=1e6, V_0=1e-12, T_A=8000, T_ref=293.15, T=298.15, del_M=1, **additional_parameters):
         self.E_G = E_G  # Specific cost for Structure (J/cm^3)
-        self._P_Am = P_Am  # Surface-specific maximum assimilation rate (J/d.cm^2)
+        self._p_Am = p_Am  # Surface-specific maximum assimilation rate (J/d.cm^2)
         self._v = v  # Energy conductance (cm/d)
-        self._P_M = P_M  # Volume-specific somatic maintenance rate (J/d.cm^3)
-        self._P_T = P_T  # Surface-specific somatic maintenance rate (J/d.cm^3)
+        self._p_M = p_M  # Volume-specific somatic maintenance rate (J/d.cm^3)
+        self._p_T = p_T  # Surface-specific somatic maintenance rate (J/d.cm^3)
         self.kappa = kappa  # Allocation to soma (-)
         self._k_J = k_J  # Maturity maintenance rate coefficient (d^-1)
         self.kap_R = kap_R  # Reproduction efficiency (-)
@@ -49,7 +46,7 @@ class Pet:
         # Chemical composition
         if comp is None:
             self.comp = Composition()
-        elif isinstance(comp, list) or isinstance(comp, tuple):
+        elif isinstance(comp, (list, tuple)):
             self.comp = Composition(*comp)
         elif isinstance(comp, dict):
             self.comp = Composition(**comp)
@@ -63,13 +60,15 @@ class Pet:
             setattr(self, name, value)
 
     def check_validity(self):
+        # TODO: return or print the reason for invalidity
+        # TODO: test invalid params
         """
         Checks that the parameters of the Pet are within the allowable part of the parameter space of the standard DEB
         model.
         :return: true if the parameters are valid, false otherwise
         """
         # All parameters must be positive
-        if self.kap_P < 0 or self.kap_X < 0 or self._P_M < 0 or self._P_Am < 0 or self._v < 0 or self._P_T < 0 or \
+        if self.kap_P < 0 or self.kap_X < 0 or self._p_M < 0 or self._p_Am < 0 or self._v < 0 or self._p_T < 0 or \
                 self.kappa < 0 or self.E_G < 0 or self._k_J < 0 or self.E_Hb < 0 or self.E_Hp < 0 or self.kap_R < 0 or \
                 self.T_A < 0:
             return False
@@ -79,13 +78,23 @@ class Pet:
         # Efficiencies must be lower than one
         if self.kap_X >= 1 or self.kap_P >= 1 or self.kap_R >= 1 or self.kap_G >= 1 or self.kappa >= 1:
             return False
+        # Constraint to reach birth
+        if (1 - self.kappa) * self._p_Am * (self.L_m ** 2) <= self._k_J * self.E_Hb:
+            return False
         # Constraint to reach puberty
-        # TODO: Check this constraint is correct
-        # if (1 - self.kappa) * self._p_Am * (self.L_m ** 2) < self._k_J * self.E_Hp:
-        #     return False
+        if (1 - self.kappa) * self._p_Am * (self.L_m ** 2) <= self._k_J * self.E_Hp:
+            return False
+        # Supply stress outside the supply-demand spectrum
+        if self.s_s >= 4/27:
+            return False
         return True
 
     def convert_to_physical_length(self, V):
+        """
+        Converts a structure value to physical length using the shape coefficient del_M.
+        :param V: structure
+        :return: physical length
+        """
         return V ** (1 / 3) / self.del_M
 
     def __getattr__(self, item):
@@ -102,6 +111,10 @@ class Pet:
         return
 
     def aggregated_chemical_reactions(self):
+        """
+        Returns a dictionary with the aggregated chemical reactions complete with stoichiometry coefficients.
+        :return: dictionary with the three aggregated chemical reactions as strings
+        """
         assimilation = f'{self.gamma_O[0, 0]:.4} X + {self.gamma_M[2, 0]:.4} O2 -> E + {-self.gamma_M[0, 0]:.4} CO2 ' \
                        f'+ {-self.gamma_M[1, 0]:.4} H20 + {-self.gamma_M[3, 0]:.4} {self.comp.N.chemical_formula} + ' \
                        f'{-self.gamma_O[3, 0]:.4} P'
@@ -123,7 +136,7 @@ class Pet:
     @property
     def E_m(self):
         """Maximum energy density (J/cm^3)."""
-        return self.P_Am / self.v
+        return self._p_Am / self._v
 
     @property
     def g(self):
@@ -133,7 +146,7 @@ class Pet:
     @property
     def k_M(self):
         """Somatic maintenance rate coefficient k_M (d^-1)."""
-        return self._P_M / self.E_G * self.TC
+        return self._p_M / self.E_G * self.TC
 
     @property
     def k(self):
@@ -143,7 +156,7 @@ class Pet:
     @property
     def L_m(self):
         """Maximum length L_m (cm)."""
-        return self.kappa * self._P_Am / self._P_M
+        return self.kappa * self._p_Am / self._p_M
 
     @property
     def kap_G(self):
@@ -162,6 +175,7 @@ class Pet:
 
     @property
     def eta_O(self):
+        # TODO: Rewrite using the yield coefficients for better understanding
         """Computes the matrix of coefficients that couple mass fluxes of organic compounds to energy fluxes."""
         return np.array([[-1 / (self.kap_X * self.comp.X.mu), 0, 0],
                          [0, 0, self.comp.V.d / (self.E_G * self.comp.V.w)],
@@ -194,6 +208,11 @@ class Pet:
         return self.comp.E.mu * self.M_V / self.E_G
 
     @property
+    def y_PX(self):
+        """Yield of feces on food (-)."""
+        return self.kap_P * self.comp.X.mu / self.comp.P.mu
+
+    @property
     def gamma_O(self):
         """Computes the matrix of stoichiometry coefficients for organic compounds in the assimilation, dissipation and
         growth aggregated chemical reactions."""
@@ -208,16 +227,21 @@ class Pet:
         growth aggregated chemical reactions."""
         return -np.linalg.inv(self.comp.n_M) @ self.comp.n_O @ self.gamma_O
 
+    @property
+    def s_s(self):
+        """Supply Stress (-)."""
+        return self._k_J * self.E_Hp * (self._p_M ** 2) / (self._p_Am ** 3)
+
 
 # Dictionary with parameters for several commom organisms. Usage with Pet class is: Pet(**animals[pet_name])
 animals = {
-    'shark': dict(E_G=5212.32, P_Am=558.824, v=0.02774, P_M=34.3632, kappa=0.84851, k_J=0.002, kap_R=0.95, E_Hb=7096,
+    'shark': dict(E_G=5212.32, p_Am=558.824, v=0.02774, p_M=34.3632, kappa=0.84851, k_J=0.002, kap_R=0.95, E_Hb=7096,
                   E_Hp=300600, E_0=174_619, T=282.15),
-    'muskox': dict(E_G=7842.44, P_Am=1053.62, v=0.13958, P_M=18.4042, kappa=0.82731, k_J=0.00087827, kap_R=0.95,
+    'muskox': dict(E_G=7842.44, p_Am=1053.62, v=0.13958, p_M=18.4042, kappa=0.82731, k_J=0.00087827, kap_R=0.95,
                    E_Hb=1.409e+7, E_Hp=3.675e+8, E_Hx=5.136e+7, t_0=18.2498, f_milk=1, T=310.85),
-    'human': dict(E_G=7879.55, P_Am=118.992, v=0.031461, P_M=2.5826, kappa=0.78656, k_J=0.00026254, kap_R=0.95,
+    'human': dict(E_G=7879.55, p_Am=118.992, v=0.031461, p_M=2.5826, kappa=0.78656, k_J=0.00026254, kap_R=0.95,
                   E_Hb=4.81e+6, E_Hp=8.726e+7, E_Hx=1.346e+7, t_0=26.8217, f_milk=1),
-    'bos_taurus_alentejana': dict(E_G=8261.79, P_Am=2501.03, v=0.107224, P_M=42.2556, kappa=0.976264, k_J=0.0002,
+    'bos_taurus_alentejana': dict(E_G=8261.79, p_Am=2501.03, v=0.107224, p_M=42.2556, kappa=0.976264, k_J=0.0002,
                                   kap_R=0.95, E_Hb=2071229.972, E_Hp=30724119.81, E_Hx=15139260.45, t_0=109.4715964,
                                   f_milk=1, del_M=0.349222),
 }

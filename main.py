@@ -18,14 +18,16 @@ if __name__ == '__main__':
     model = models.STX(cow)
 
     # Simulate the organism from birth with constant food density equal to 1
-    food_function = lambda t: 1
-    model.simulate(food_function=food_function, t_span=(0, 4000), step_size='auto', initial_state='birth')
+    sol = model.simulate(food_function=1, t_span=(0, 10000), step_size='auto', initial_state='birth')
+
+    fully_sol = model.fully_grown()
 
     # Visualize the simulation
     viz = Plotter(model)
+
+    viz.plot_state_vars()
+    viz.plot_powers()
+    viz.plot_mineral_fluxes()
+    viz.plot_real_variables()
     viz.plot_entropy_generation()
-    # viz.plot_state_vars()
-    # viz.plot_powers()
-    # viz.plot_mineral_fluxes()
-    # viz.plot_real_variables()
 

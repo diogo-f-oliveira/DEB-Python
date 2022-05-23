@@ -1,6 +1,7 @@
 from scipy.integrate import solve_ivp
 import numpy as np
 from pet import Pet
+import solution
 
 
 class STD:
@@ -30,13 +31,15 @@ class STD:
         # Check validity of parameters of Pet
         if not organism.check_validity():
             raise Exception("Parameter values of Pet are not valid.")
+
         self.organism = organism
-        self.sol = None  # Output from integration of state equations
+        self.ode_sol = None  # Output from ODE solver
+        self.sol = None  # Full solution including powers, fluxes and entropy
         self.food_function = None  # Function of scaled functional feeding response (f) over time
 
-    def simulate(self, food_function, t_span, step_size='auto', initial_state='birth'):
+    def simulate(self, t_span, food_function=1, step_size='auto', initial_state='birth'):
         """
-        Integrates state equations over time. The output from the solver is stored in self.sol.
+        Integrates state equations over time. The output from the solver is stored in self.ode_sol.
 
         :param food_function: Function of scaled functional feeding response (f) over time. Must be of signature
             f = food_function(time).
@@ -57,19 +60,40 @@ class STD:
                             f"tuple of length 4 with format (E, V, E_H, E_R).")
 
         # Store the food function
-        self.food_function = food_function
+        if isinstance(food_function, (float, int)):
+            if food_function < 0 or food_function > 1:
+                raise Exception("The scaled functional response f must be between 0 and 1.")
+            else:
+                self.food_function = lambda t: food_function
+        elif callable(food_function):
+            self.food_function = food_function
+        else:
+            raise Exception("Argument food_function must be a number between 0 and 1 or callable.")
 
         # Define the times at which the solver should store the computed solution.
         if step_size == 'auto':
             t_eval = None
-        elif isinstance(step_size, int) or isinstance(step_size, float):
+        elif isinstance(step_size, (float, int)):
             t_eval = np.arange(*t_span, step_size)
         else:
             raise Exception(f"Invalid step size value: {step_size}. Please select 'auto' for automatic step size during"
                             f" integration or input a fixed step size.")
 
         # Integrate the state equations
-        self.sol = solve_ivp(self.state_changes, t_span, initial_state, t_eval=t_eval, max_step=self.MAX_STEP_SIZE)
+        self.ode_sol = solve_ivp(self.state_changes, t_span, initial_state, t_eval=t_eval, max_step=self.MAX_STEP_SIZE)
+        self.sol = solution.TimeIntervalSol(self)
+        return self.sol
+
+    def fully_grown(self, f=1, E_R=0):
+        # Create food function
+        self.food_function = lambda t: f
+        # State variables at full growth
+
+        state_vars = (self.organism.E_m * (f * self.organism.L_m) ** 3,
+                      (f * self.organism.L_m) ** 3,
+                      self.organism.E_Hp,
+                      E_R)
+        return solution.TimeInstantSol(self, 0, state_vars)
 
     def state_changes(self, t, state_vars):
         """
@@ -119,13 +143,13 @@ class STD:
                 if maturity < self.organism.E_Hb:  # Embryo life stage
                     p_A[i] = 0
                 else:
-                    p_A[i] = self.organism.P_Am * self.food_function(time) * (structure ** (2 / 3))
+                    p_A[i] = self.organism.p_Am * self.food_function(time) * (structure ** (2 / 3))
             return p_A
         else:
             if E_H < self.organism.E_Hb:  # Embryo life stage
                 return 0
             else:
-                return self.organism.P_Am * self.food_function(t) * (V ** (2 / 3))
+                return self.organism.p_Am * self.food_function(t) * (V ** (2 / 3))
 
     def p_C(self, E, V):
         """
@@ -135,7 +159,7 @@ class STD:
         :param V: Scalar or array of Structure values
         :return: Scalar or array of mobilization power p_C values
         """
-        return E * (self.organism.E_G * self.organism.v * (V ** (-1 / 3)) + self.organism.P_M) / \
+        return E * (self.organism.E_G * self.organism.v * (V ** (-1 / 3)) + self.organism.p_M) / \
                (self.organism.kappa * E / V + self.organism.E_G)
 
     def p_S(self, V):
@@ -145,7 +169,7 @@ class STD:
         :param V: Scalar or array of Structure values
         :return: Scalar or array of somatic maintenance power p_S values
         """
-        return self.organism.P_M * V
+        return self.organism.p_M * V
 
     def p_G(self, p_C, p_S):
         """
@@ -157,7 +181,6 @@ class STD:
         """
         return self.organism.kappa * p_C - p_S
 
-    # Maturity Maintenance Flux
     def p_J(self, E_H):
         """
         Computes the maturity maintenance power p_J
@@ -179,7 +202,6 @@ class STD:
             else:  # Adult life stage
                 return self.organism.k_J * self.organism.E_Hp
 
-    # Maturation/Reproduction Flux
     def p_R(self, p_C, p_J):
         """
         Computes the reproduction power p_R
@@ -238,7 +260,7 @@ class STD:
             p_G = np.array([p_G])
         powers = np.array([p_A, p_D, p_G])
         return -(self.organism.comp.h_M @ np.linalg.inv(self.organism.comp.n_M) @ self.organism.comp.n_O
-                - self.organism.comp.h_O) @ self.organism.gamma_O @ powers / self.organism.T / self.organism.comp.E.mu
+                 - self.organism.comp.h_O) @ self.organism.gamma_O @ powers / self.organism.T / self.organism.comp.E.mu
 
 
 class STX(STD):
@@ -276,7 +298,7 @@ class STX(STD):
         if not hasattr(organism, 't_0') or not hasattr(organism, 'E_Hx'):
             raise Exception('The organism is not compatible with model STX: parameters t_0 and E_Hx are required.')
         elif organism.t_0 <= 0:
-            raise Exception("The time until gestation can't be negative.")  # TODO: Write the parameter name properly
+            raise Exception("The time until start of development can't be negative.")
         elif organism.E_Hx <= organism.E_Hb or organism.E_Hx >= organism.E_Hp:
             raise Exception("The weaning maturity level must be larger than the maturity at birth and smaller than "
                             "maturity at puberty.")
@@ -284,7 +306,7 @@ class STX(STD):
         if not hasattr(organism, 'f_milk'):
             setattr(organism, 'f_milk', 1)
         elif organism.f_milk <= 0:
-            raise Exception("The parameter f_milk must be positive")  # TODO: Write the exception text properly
+            raise Exception("The parameter f_milk must be positive.")
         # Set the energy density of the mother to the maximum energy density
         if not hasattr(organism, 'E_density_mother'):
             setattr(organism, 'E_density_mother', organism.E_m)
@@ -350,17 +372,17 @@ class STX(STD):
                 if maturity < self.organism.E_Hb:  # Pet is a foetus
                     p_A[i] = 0
                 elif maturity < self.organism.E_Hx:  # Baby stage
-                    p_A[i] = self.organism.P_Am * self.organism.f_milk * (structure ** (2 / 3))
+                    p_A[i] = self.organism.p_Am * self.organism.f_milk * (structure ** (2 / 3))
                 else:  # Adult
-                    p_A[i] = self.organism.P_Am * self.food_function(time) * (structure ** (2 / 3))
+                    p_A[i] = self.organism.p_Am * self.food_function(time) * (structure ** (2 / 3))
             return p_A
         else:
             if E_H < self.organism.E_Hb:  # Pet is a foetus
                 return 0
             elif E_H < self.organism.E_Hx:  # Baby stage
-                return self.organism.P_Am * self.organism.f_milk * (V ** (2 / 3))
+                return self.organism.p_Am * self.organism.f_milk * (V ** (2 / 3))
             else:  # Adult
-                return self.organism.P_Am * self.food_function(t) * (V ** (2 / 3))
+                return self.organism.p_Am * self.food_function(t) * (V ** (2 / 3))
 
     def p_G(self, p_C, p_S, V, E_H):
         """
@@ -410,71 +432,3 @@ class STX(STD):
                 return (1 - self.organism.kappa) * (p_S + p_G) / self.organism.kappa - p_J
             else:
                 return (1 - self.organism.kappa) * p_C - p_J
-
-
-class Solution:
-    # TODO: Have Solution class update whilst simulation is running
-    # TODO: Keep track of maximum values of quantities of interest
-    """
-    Solution class:
-
-    Stores the complete solution to the integration of state equations, including state variables, powers and fluxes, as
-    well as time of stage transitions.
-    """
-
-    def __init__(self, model):
-
-        self.model_type = type(model).__name__
-
-        self.organism = model.organism
-
-        self.t = model.sol.t
-        self.E = model.sol.y[0]
-        self.V = model.sol.y[1]
-        self.E_H = model.sol.y[2]
-        self.E_R = model.sol.y[3]
-
-        self.calculate_powers(model)
-
-        self.mineral_fluxes = model.mineral_fluxes(self.p_A, self.p_D, self.p_G)
-        self.entropy = model.entropy_generation(self.p_A, self.p_D, self.p_G)
-
-        self.time_of_birth = None
-        self.time_of_weaning = None
-        self.time_of_puberty = None
-        self.calculate_stage_transitions()
-
-        self.calculate_real_variables()
-
-    def calculate_stage_transitions(self):
-        """Calculates the time step of life stage transitions."""
-        for t, E_H in zip(self.t, self.E_H):
-            if not self.time_of_birth and E_H > self.organism.E_Hb:
-                self.time_of_birth = t
-            elif not self.time_of_weaning and hasattr(self.organism, 'E_Hx'):
-                if E_H > self.organism.E_Hx:
-                    self.time_of_weaning = t
-            elif not self.time_of_puberty and E_H > self.organism.E_Hp:
-                self.time_of_puberty = t
-
-    def calculate_powers(self, model):
-        """Computes all powers over every time step."""
-        if self.model_type == 'STD':
-            self.p_A = model.p_A(self.V, self.E_H, self.t)
-            self.p_C = model.p_C(self.E, self.V)
-            self.p_S = model.p_S(self.V)
-            self.p_G = model.p_G(self.p_C, self.p_S)
-            self.p_J = model.p_J(self.E_H)
-            self.p_R = model.p_R(self.p_C, self.p_J)
-            self.p_D = model.p_D(self.p_S, self.p_J, self.p_R, self.E_H)
-        elif self.model_type == 'STX':
-            self.p_A = model.p_A(self.V, self.E_H, self.t)
-            self.p_C = model.p_C(self.E, self.V)
-            self.p_S = model.p_S(self.V)
-            self.p_G = model.p_G(self.p_C, self.p_S, self.V, self.E_H)
-            self.p_J = model.p_J(self.E_H)
-            self.p_R = model.p_R(self.p_C, self.p_J, self.p_S, self.p_G, self.E_H)
-            self.p_D = model.p_D(self.p_S, self.p_J, self.p_R, self.E_H)
-
-    def calculate_real_variables(self):
-        self.physical_length = self.organism.convert_to_physical_length(self.V)
