@@ -59,7 +59,6 @@ class Pet:
             setattr(self, name, value)
 
     def check_validity(self):
-        # TODO: return or print the reason for invalidity
         """
         Checks that the parameters of the Pet are within the allowable part of the parameter space of the standard DEB
         model.
@@ -69,18 +68,18 @@ class Pet:
         if self.kap_P < 0 or self.kap_X < 0 or self._p_M < 0 or self._p_Am < 0 or self._v < 0 or self._p_T < 0 or \
                 self.kappa < 0 or self.E_G < 0 or self._k_J < 0 or self.E_Hb < 0 or self.E_Hp < 0 or self.kap_R < 0 or \
                 self.T_A < 0:
-            return False
+            return False, "All parameters must be positive."
         # Maturity at puberty must be higher than maturity at birth
         if self.E_Hb >= self.E_Hp:
-            return False
+            return False, "Maturity at puberty must be higher than maturity at birth."
         # Efficiencies must be lower than one
         if self.kap_X >= 1 or self.kap_P >= 1 or self.kap_R >= 1 or self.kap_G >= 1 or self.kappa >= 1:
-            return False
+            return False, "Efficiencies must be lower than one."
 
         # Supply stress outside the supply-demand spectrum
         if self.s_s >= 4 / 27:
-            return False
-        return True
+            return False, "Supply stress outside the supply-demand spectrum."
+        return True, "All good!"
 
     def check_viability(self):
         """
@@ -89,11 +88,11 @@ class Pet:
         """
         # Constraint to reach birth
         if (1 - self.kappa) * self._p_Am * (self.L_m ** 2) <= self._k_J * self.E_Hb:
-            return False
+            return False, "Impossible to reach birth."
         # Constraint to reach puberty
         if (1 - self.kappa) * self._p_Am * (self.L_m ** 2) <= self._k_J * self.E_Hp:
-            return False
-        return True
+            return False, "Impossible to reach puberty."
+        return True, "All good!"
 
     def convert_to_physical_length(self, V):
         """
@@ -147,6 +146,7 @@ class Pet:
         return {'assimilation': assimilation, 'dissipation': dissipation, 'growth': growth}
 
     def print_reactions(self):
+        """Prints the aggregated chemical reactions."""
         reactions = self.aggregated_chemical_reactions()
 
         for reaction_name, formula in reactions.items():

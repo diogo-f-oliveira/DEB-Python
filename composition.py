@@ -2,10 +2,27 @@ import numpy as np
 
 
 class Compound:
+    """
+    class Compound:
+
+        Stores the properties of a compound, including the chemical indices, the specific density, the chemical
+        potential, the enthalpy of formation, the molecular weight and the chemical formula.
+    """
     ATOMS = ['C', 'H', 'O', 'N']
     MOLECULAR_WEIGHTS = [12, 1, 16, 14]
 
     def __init__(self, n, d, mu, h, name, chemical_formula=None):
+        """
+        Instantiates a compound. The chemical indices, the specific density, the chemical potential, the enthalpy of
+        formation and name of the compound are required. Molecular weight is computed from the chemical indices. If a
+        chemical formula is not provided, it is built from the chemical indices.
+        :param n: sequence of length 4 containing the the chemical indices in the order (C, H, O, N)
+        :param d: specific density
+        :param mu: chemical potential
+        :param h: enthalpy of formation
+        :param name: name of the compound
+        :param chemical_formula: chemical formula
+        """
         if len(n) != len(self.ATOMS):
             raise Exception("Chemical indices must be have length 4 corresponding to (C, H, O, N)")
         if not isinstance(n, np.ndarray):
@@ -23,6 +40,8 @@ class Compound:
 
     @property
     def chemical_formula(self):
+        """Returns the chemical formula. If a chemical formula was provided in the creation of the compound, that is
+        returned. Otherwise, it is build from the chemical indices."""
         if self._chemical_formula is not None:
             return self._chemical_formula
         string = ''
@@ -39,43 +58,66 @@ class Compound:
 
     @classmethod
     def carbon_dioxide(cls):
+        """Constructor for carbon dioxide (CO2)."""
         return cls(n=(1, 0, 2, 0), d=0.1, mu=0, h=-393_520, name='Carbon Dioxide', chemical_formula='CO2')
 
     @classmethod
     def water(cls):
+        """Constructor for water (H2O)."""
         return cls(n=(0, 2, 1, 0), d=0.1, mu=0, h=-285_830, name='Water', chemical_formula='H2O')
 
     @classmethod
     def oxygen(cls):
+        """Constructor for oxygen (O2)."""
         return cls(n=(0, 0, 2, 0), d=0.1, mu=0, h=0, name='Oxygen', chemical_formula='O2')
 
     @classmethod
     def urea(cls):
+        """Constructor for urea (CO(NH2)2)."""
         return cls(n=(1, 4, 1, 2), d=0.1, mu=0, h=0, name='Urea', chemical_formula='CO(NH2)2')
 
     @classmethod
     def ammonia(cls):
+        """Constructor for ammonia (NH3)."""
         return cls(n=(0, 3, 0, 1), d=0.1, mu=0, h=-46_100, name='Ammonia', chemical_formula='NH3')
 
     @classmethod
     def food(cls, n=(1, 1.8, 0.5, 0.15), d=0.1, mu=525_000, h=-117_300):
+        """Constructor for food (X). Properties have default values, but can be overridden."""
         return cls(n=n, d=d, mu=mu, h=h, name='Food')
 
     @classmethod
     def structure(cls, n=(1, 1.8, 0.5, 0.15), d=0.1, mu=500_000, h=-117_300):
+        """Constructor for structure (V). Properties have default values, but can be overridden."""
         return cls(n=n, d=d, mu=mu, h=h, name='Structure')
 
     @classmethod
     def reserve(cls, n=(1, 1.8, 0.5, 0.15), d=0.1, mu=550_000, h=-117_300):
+        """Constructor for reserve (E). Properties have default values, but can be overridden."""
         return cls(n=n, d=d, mu=mu, h=h, name='Reserve')
 
     @classmethod
     def feces(cls, n=(1, 1.8, 0.5, 0.15), d=0.1, mu=480_000, h=-117_300):
+        """Constructor for food (P). Properties have default values, but can be overridden."""
         return cls(n=n, d=d, mu=mu, h=h, name='Feces')
 
 
 class Composition:
+    """
+    class Composition:
+        Stores the composition of an organism: 4 mineral compounds and 4 organic compounds. Assumes that 3 minerals are:
+        carbon dioxide, water and oxygen. Has methods for returning matrices used in computations.
+    """
     def __init__(self, n_waste=None, food=None, structure=None, reserve=None, feces=None):
+        """
+        Instantiates a Composition. If any argument is not provided, standard composition of DEB theory is assumed, with
+        urea as nitrogenous waste.
+        :param n_waste: Compound class for nitrogenous waste
+        :param food: Compound class for food
+        :param structure: Compound class for structure
+        :param reserve: Compound class for reserve
+        :param feces: Compound class for feces
+        """
         self.C = Compound(n=(1, 0, 2, 0), d=0.1, mu=0, h=-393_520, name='Carbon Dioxide')
         self.H = Compound(n=(0, 2, 1, 0), d=0.1, mu=0, h=-285_830, name='Water')
         self.O = Compound(n=(0, 0, 2, 0), d=0.1, mu=0, h=0, name='Oxygen')
@@ -111,18 +153,22 @@ class Composition:
 
     @property
     def n_O(self):
+        """Matrix of chemical indices of organic compounds."""
         return np.array([self.X.n, self.V.n, self.E.n, self.P.n]).T
 
     @property
     def n_M(self):
+        """Matrix of chemical indices of mineral compounds."""
         return np.array([self.C.n, self.H.n, self.O.n, self.N.n]).T
 
     @property
     def h_O(self):
+        """Vector of enthalpies of formation of organic compounds."""
         return np.array([self.X.h, self.V.h, self.E.h, self.P.h])
 
     @property
     def h_M(self):
+        """Vector of enthalpies of formation of mineral compounds."""
         return np.array([self.C.h, self.H.h, self.O.h, self.N.h])
 
 

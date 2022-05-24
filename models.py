@@ -37,9 +37,11 @@ class STD:
 
     @staticmethod
     def filter_pet(organism):
+        """Ensures that the parameters of the organism are valid."""
         # Check validity of parameters of Pet
-        if not organism.check_validity():
-            raise Exception("Parameter values of Pet are not valid.")
+        valid, reason = organism.check_validity()
+        if not valid:
+            raise Exception(f"Invalid Pet parameters. {reason}")
 
     def simulate(self, t_span, food_function=1, step_size='auto', initial_state='birth'):
         """
@@ -90,6 +92,12 @@ class STD:
         return self.sol
 
     def fully_grown(self, f=1, E_R=0):
+        """
+        Returns a TimeInstantSol of the organism at full growth for a given food level and reproduction buffer
+        :param f: scaled functional feeding response f
+        :param E_R: reproduction buffer E_R
+        :return: TimeInstantSol of the organism at full growth
+        """
         # Create food function
         self.food_function = lambda t: f
         # State variables at full growth
@@ -259,6 +267,13 @@ class STD:
         return self.organism.eta_M @ powers
 
     def entropy_generation(self, p_A, p_D, p_G):
+        """
+        Computes the entropy from the assimilation power p_A, dissipation power p_D and growth power p_G.
+        :param p_A: Scalar or array of assimilation power values
+        :param p_D: Scalar or array of dissipation power values
+        :param p_G: Scalar or array of growth power values
+        :return: scalar or array of entropy values.
+        """
         if type(p_A) != np.ndarray:
             p_A = np.array([p_A])
             p_D = np.array([p_D])
@@ -281,7 +296,6 @@ class STX(STD):
         Buffer (E_R).
         Integrates all state variables over time according to an input function of scaled functional feeding response
         (f) over time.
-
     """
 
     def __init__(self, organism):
@@ -297,6 +311,8 @@ class STX(STD):
         super().__init__(organism)
 
     def filter_pet(self, organism):
+        """Ensures that the parameters of Pet are valid and that the required parameters for model STX, t_0 and E_Hx,
+        are defined."""
         # Checks validity of parameters of Pet
         super().filter_pet(organism)
 

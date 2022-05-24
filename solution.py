@@ -5,7 +5,14 @@ class TimeInstantSol:
         Stores the complete state of the organism at a given time step, including state variables, powers,  fluxes,
         entropy and real variables such as physical length.
         """
+
     def __init__(self, model, t, state_vars):
+        """
+        Creates an instance of TimeInstantSol
+        :param model: model class
+        :param t: time (d)
+        :param state_vars: state variables at time t in the order (E, V, E_H, E_R)
+        """
         self.model_type = type(model).__name__
 
         self.organism = model.organism
@@ -56,8 +63,13 @@ class TimeIntervalSol(TimeInstantSol):
     """
 
     def __init__(self, model):
+        """
+        Creates an instance of TimeIntervalSol from a model containing a simulation of the organism.
+        :param model: model class
+        """
+        if model.ode_sol is None:
+            raise Exception("Model must contain a simulation of the organism. Please run a simulation first.")
 
-        # (model.ode_sol.y[0], model.ode_sol.y[1], model.ode_sol.y[2], model.ode_sol.y[3])
         super().__init__(model, model.ode_sol.t, model.ode_sol.y)
 
         self.time_of_birth = None
@@ -75,3 +87,7 @@ class TimeIntervalSol(TimeInstantSol):
                     self.time_of_weaning = t
             elif not self.time_of_puberty and E_H > self.organism.E_Hp:
                 self.time_of_puberty = t
+
+    def __getitem__(self, time_step):
+        # TODO: Return a TimeInstantSol. Interpolate when the time step does not exist.
+        return time_step
