@@ -261,7 +261,7 @@ animals = {
                   E_Hb=4.81e+6, E_Hp=8.726e+7, E_Hx=1.346e+7, t_0=26.8217, f_milk=1),
     'bos_taurus_alentejana': dict(E_G=8261.79, p_Am=2501.03, v=0.107224, p_M=42.2556, kappa=0.976264, k_J=0.0002,
                                   kap_R=0.95, E_Hb=2071229.972, E_Hp=30724119.81, E_Hx=15139260.45, t_0=109.4715964,
-                                  f_milk=1, del_M=0.349222),
+                                  f_milk=1, del_M=0.349222, kap_X=0.3),
 }
 
 if __name__ == '__main__':

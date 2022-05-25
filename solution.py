@@ -1,3 +1,8 @@
+from abc import abstractmethod
+from collections.abc import MutableSequence
+import numpy as np
+
+
 class TimeInstantSol:
     """
         TimeIntervalSol class:
@@ -21,40 +26,26 @@ class TimeInstantSol:
         self.t = t
         self.E, self.V, self.E_H, self.E_R = state_vars
 
+        # Apply transform to the organism
+        model.transform(self.organism, t, state_vars)
+
         # Powers
-        self.calculate_powers(model)
+        powers = model.compute_powers(t, state_vars, compute_dissipation_power=True)
+        self.p_A, self.p_C, self.p_S, self.p_G, self.p_J, self.p_R, self.p_D = powers
+
         # Fluxes
         self.mineral_fluxes = model.mineral_fluxes(self.p_A, self.p_D, self.p_G)
         # Entropy
-        self.entropy = model.entropy_generation(self.p_A, self.p_D, self.p_G)
+        self.entropy = model.entropy_generation(self.p_A, self.p_D, self.p_G)[0]
         # Physical Length
         self.calculate_real_variables()
-
-    def calculate_powers(self, model):
-        """Computes all powers over every time step."""
-        if self.model_type == 'STD':
-            self.p_A = model.p_A(self.V, self.E_H, self.t)
-            self.p_C = model.p_C(self.E, self.V)
-            self.p_S = model.p_S(self.V)
-            self.p_G = model.p_G(self.p_C, self.p_S)
-            self.p_J = model.p_J(self.E_H)
-            self.p_R = model.p_R(self.p_C, self.p_J)
-            self.p_D = model.p_D(self.p_S, self.p_J, self.p_R, self.E_H)
-        elif self.model_type == 'STX':
-            self.p_A = model.p_A(self.V, self.E_H, self.t)
-            self.p_C = model.p_C(self.E, self.V)
-            self.p_S = model.p_S(self.V)
-            self.p_G = model.p_G(self.p_C, self.p_S, self.V, self.E_H)
-            self.p_J = model.p_J(self.E_H)
-            self.p_R = model.p_R(self.p_C, self.p_J, self.p_S, self.p_G, self.E_H)
-            self.p_D = model.p_D(self.p_S, self.p_J, self.p_R, self.E_H)
 
     def calculate_real_variables(self):
         """Computes real variables such as physical length, etc... (WIP)"""
         self.physical_length = self.organism.convert_to_physical_length(self.V)
 
 
-class TimeIntervalSol(TimeInstantSol):
+class TimeIntervalSol(MutableSequence):
     """
     TimeIntervalSol class:
 
@@ -62,15 +53,21 @@ class TimeIntervalSol(TimeInstantSol):
     entropy and real variables such as physical length, as well as time of stage transitions.
     """
 
-    def __init__(self, model):
+    def __init__(self, model, ode_sol):
         """
         Creates an instance of TimeIntervalSol from a model containing a simulation of the organism.
         :param model: model class
         """
-        if model.ode_sol is None:
-            raise Exception("Model must contain a simulation of the organism. Please run a simulation first.")
+        self.model = model
 
-        super().__init__(model, model.ode_sol.t, model.ode_sol.y)
+        self._time_instant_sols = []
+        self.t = ode_sol.t
+        self._time_to_index = {self.t[i]:i for i in range(len(self.t))}
+
+        self.E, self.V, self.E_H, self.E_R = ode_sol.y
+
+        for i in range(len(self.t)):
+            self._time_instant_sols.append(TimeInstantSol(self.model, self.t[i], ode_sol.y[:, i]))
 
         self.time_of_birth = None
         self.time_of_weaning = None
@@ -80,14 +77,71 @@ class TimeIntervalSol(TimeInstantSol):
     def calculate_stage_transitions(self):
         """Calculates the time step of life stage transitions."""
         for t, E_H in zip(self.t, self.E_H):
-            if not self.time_of_birth and E_H > self.organism.E_Hb:
+            if not self.time_of_birth and E_H > self.model.organism.E_Hb:
                 self.time_of_birth = t
-            elif not self.time_of_weaning and hasattr(self.organism, 'E_Hx'):
-                if E_H > self.organism.E_Hx:
+            elif not self.time_of_weaning and hasattr(self.model.organism, 'E_Hx'):
+                if E_H > self.model.organism.E_Hx:
                     self.time_of_weaning = t
-            elif not self.time_of_puberty and E_H > self.organism.E_Hp:
+            elif not self.time_of_puberty and E_H > self.model.organism.E_Hp:
                 self.time_of_puberty = t
 
     def __getitem__(self, time_step):
-        # TODO: Return a TimeInstantSol. Interpolate when the time step does not exist.
-        return time_step
+        # TODO: Interpolate when the time step does not exist.
+        if isinstance(time_step, int):
+            return self._time_instant_sols[time_step]
+        elif isinstance(time_step, (float, np.float64)):
+            if time_step in self._time_to_index:
+                return self._time_instant_sols[self._time_to_index[time_step]]
+
+    def __setitem__(self, key, value):
+        return
+
+    def __delitem__(self, key):
+        # TODO: Delete a time step
+        return
+
+    def __len__(self):
+        return len(self.t)
+
+    def insert(self, index: int, value) -> None:
+        return
+
+    @property
+    def p_A(self):
+        return np.array([sol.p_A for sol in self._time_instant_sols])
+
+    @property
+    def p_C(self):
+        return np.array([sol.p_C for sol in self._time_instant_sols])
+
+    @property
+    def p_S(self):
+        return np.array([sol.p_S for sol in self._time_instant_sols])
+
+    @property
+    def p_G(self):
+        return np.array([sol.p_G for sol in self._time_instant_sols])
+
+    @property
+    def p_J(self):
+        return np.array([sol.p_J for sol in self._time_instant_sols])
+
+    @property
+    def p_R(self):
+        return np.array([sol.p_R for sol in self._time_instant_sols])
+
+    @property
+    def p_D(self):
+        return np.array([sol.p_D for sol in self._time_instant_sols])
+
+    @property
+    def mineral_fluxes(self):
+        return np.concatenate([sol.mineral_fluxes for sol in self._time_instant_sols], axis=1)
+
+    @property
+    def entropy(self):
+        return np.array([sol.entropy for sol in self._time_instant_sols])
+
+    @property
+    def physical_length(self):
+        return np.array([sol.physical_length for sol in self._time_instant_sols])

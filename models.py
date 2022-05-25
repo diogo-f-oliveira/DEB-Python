@@ -43,7 +43,7 @@ class STD:
         if not valid:
             raise Exception(f"Invalid Pet parameters. {reason}")
 
-    def simulate(self, t_span, food_function=1, step_size='auto', initial_state='birth'):
+    def simulate(self, t_span, food_function=1, step_size='auto', initial_state='birth', transformation=None):
         """
         Integrates state equations over time. The output from the solver is stored in self.ode_sol.
 
@@ -57,6 +57,9 @@ class STD:
         :param initial_state: Values of state variables at time t0. Format is (E, V, E_H, E_R). If initial_state='birth'
             the state variables are initialized with the values for birth (E_0, V_0, 0, 0), where E_0 and V_0 are
             defined in the Pet class.
+        :param transformation: Function that changes parameters of Pet during simulation. Takes as input the organism,
+        the time step t and the state variables at time t. Can be used for example to change food characteristics
+        or temperature.
         """
 
         # Get initial state
@@ -86,10 +89,19 @@ class STD:
             raise Exception(f"Invalid step size value: {step_size}. Please select 'auto' for automatic step size during"
                             f" integration or input a fixed step size.")
 
+        # Transformations to Pet parameters during simulation
+        if callable(transformation):
+            self.transform = transformation
+        elif transformation is not None:
+            raise Exception("Transformation function must be callable.")
+
         # Integrate the state equations
         self.ode_sol = solve_ivp(self.state_changes, t_span, initial_state, t_eval=t_eval, max_step=self.MAX_STEP_SIZE)
-        self.sol = solution.TimeIntervalSol(self)
+        self.sol = solution.TimeIntervalSol(self, self.ode_sol)
         return self.sol
+
+    def transform(self, organism, t, state_vars):
+        return
 
     def fully_grown(self, f=1, E_R=0):
         """
@@ -100,8 +112,8 @@ class STD:
         """
         # Create food function
         self.food_function = lambda t: f
-        # State variables at full growth
 
+        # State variables at full growth
         state_vars = (self.organism.E_m * (f * self.organism.L_m) ** 3,
                       (f * self.organism.L_m) ** 3,
                       self.organism.E_Hp,
@@ -116,21 +128,19 @@ class STD:
         :param state_vars: tuple of state variables (E, V, E_H, E_R)
         :return: derivatives of the state variables (dE, dV, dE_H, dE_R)
         """
-
         # Unpacking state variables (Reserve (E), Structure (E), Maturity (E_H), Reproduction Buffer (E_R))
         E, V, E_H, E_R = state_vars
 
-        # Computing fluxes
-        p_A = self.p_A(V, E_H, t)
-        p_C = self.p_C(E, V)
-        p_S = self.p_S(V)
-        p_G = self.p_G(p_C, p_S)
-        p_J = self.p_J(E_H)
-        p_R = self.p_R(p_C, p_J)
+        # Apply transform to Pet parameters
+        self.transform(self.organism, t, state_vars)
+
+        # Compute powers
+        p_A, p_C, p_S, p_G, p_J, p_R, p_D = self.compute_powers(t, state_vars)
 
         # Changes to state variables
         dE = p_A - p_C
         dV = p_G / self.organism.E_G
+
         # Maturity or Reproduction Buffer logic
         if E_H < self.organism.E_Hp:
             dE_H = p_R
@@ -139,6 +149,36 @@ class STD:
             dE_H = 0
             dE_R = self.organism.kap_R * p_R
         return dE, dV, dE_H, dE_R
+
+    def compute_powers(self, t, state_vars, compute_dissipation_power=False):
+        """
+        Computes all powers, with the option of also calculating the dissipation power p_D
+        :param t: time
+        :param E: reserve
+        :param V: structure
+        :param E_H: maturity
+        :param E_R: reproduction buffer
+        :param compute_dissipation_power: whether to compute the dissipation power
+        :return: tuple of powers (p_A, p_C, p_S, p_G, p_J, p_R, p_D)
+        """
+        # Unpacking state variables (Reserve (E), Structure (E), Maturity (E_H), Reproduction Buffer (E_R))
+        E, V, E_H, E_R = state_vars
+
+        # Computing powers
+        p_A = self.p_A(V, E_H, t)  # Assimilation power
+        p_C = self.p_C(E, V)  # Mobilization power
+        p_S = self.p_S(V)  # Somatic maintenance power
+        p_G = self.p_G(p_C, p_S)  # Growth power
+        p_J = self.p_J(E_H)  # Maturity maintenance power
+        p_R = self.p_R(p_C, p_J)  # Reproduction power
+
+        # Dissipation power
+        if compute_dissipation_power:
+            p_D = self.p_D(p_S, p_J, p_R, E_H)
+        else:
+            p_D = 0
+
+        return p_A, p_C, p_S, p_G, p_J, p_R, p_D
 
     def p_A(self, V, E_H, t):
         """
@@ -347,13 +387,11 @@ class STX(STD):
         # Unpacking state variables (Reserve (E), Structure (E), Maturity (E_H), Reproduction Buffer (E_R))
         E, V, E_H, E_R = state_vars
 
-        # Computing fluxes
-        p_A = self.p_A(V, E_H, t)
-        p_C = self.p_C(E, V)
-        p_S = self.p_S(V)
-        p_G = self.p_G(p_C, p_S, V, E_H)
-        p_J = self.p_J(E_H)
-        p_R = self.p_R(p_C, p_J, p_S, p_G, E_H)
+        # Apply transform to Pet parameters
+        self.transform(self.organism, t, state_vars)
+
+        # Compute powers
+        p_A, p_C, p_S, p_G, p_J, p_R, p_D = self.compute_powers(t, state_vars)
 
         # Pet is a foetus
         if E_H < self.organism.E_Hb:
@@ -376,6 +414,36 @@ class STX(STD):
                 dE_R = self.organism.kap_R * p_R
 
         return dE, dV, dE_H, dE_R
+
+    def compute_powers(self, t, state_vars, compute_dissipation_power=False):
+        """
+        Computes all powers, with the option of also calculating the dissipation power p_D
+        :param t: time
+        :param E: reserve
+        :param V: structure
+        :param E_H: maturity
+        :param E_R: reproduction buffer
+        :param compute_dissipation_power: whether to compute the dissipation power
+        :return: tuple of powers (p_A, p_C, p_S, p_G, p_J, p_R, p_D)
+        """
+        # Unpacking state variables (Reserve (E), Structure (E), Maturity (E_H), Reproduction Buffer (E_R))
+        E, V, E_H, E_R = state_vars
+
+        # Computing powers
+        p_A = self.p_A(V, E_H, t)  # Assimilation power
+        p_C = self.p_C(E, V)  # Mobilization power
+        p_S = self.p_S(V)  # Somatic maintenance power
+        p_G = self.p_G(p_C, p_S, V, E_H)  # Growth power
+        p_J = self.p_J(E_H)  # Maturity maintenance power
+        p_R = self.p_R(p_C, p_J, p_S, p_G, E_H)  # Reproduction power
+
+        # Dissipation power
+        if compute_dissipation_power:
+            p_D = self.p_D(p_S, p_J, p_R, E_H)
+        else:
+            p_D = 0
+
+        return p_A, p_C, p_S, p_G, p_J, p_R, p_D
 
     def p_A(self, V, E_H, t):
         """

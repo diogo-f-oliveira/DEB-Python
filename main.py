@@ -1,36 +1,41 @@
 import pet
 import models
 from visualizer import Plotter
+from math import sin
+import composition
 
 if __name__ == '__main__':
     # Create Pet from parameters. Standard composition is assumed. Parameters t_0 and E_Hx are required in the STX model
-    mammal = pet.Pet(
-        p_Am=2501.3,  # Surface-specific maximum assimilation rate (J/d.cm^2)
-        kappa=0.976264,  # Allocation fraction to soma (-)
-        v=0.107224,  # Energy conductance (cm/d)
-        p_M=42.2556,  # Volume-specific somatic maintenance rate (J/d.cm^3)
-        E_G=8261.79,  # Specific cost for Structure (J/cm^3)
-        k_J=0.0002,  # Maturity maintenance rate constant (d^-1)
-        kap_R=0.95,  # Reproduction efficiency (-)
-        E_Hb=2071229.972,  # Maturity at birth (J)
-        E_Hp=30724119.81,  # Maturity at puberty (J)
-        T=298.15,  # Temperature (K)
-        t_0=109.4715964,  # Time until start of development (d)
-        E_Hx=15139260.45,  # Maturity at weaning (J)
-    )
+    mammal = pet.Pet(**pet.animals['bos_taurus_alentejana'])
 
     print(mammal)
+    print(mammal.check_viability())
 
     # Create STX model from Pet class
     model = models.STX(mammal)
 
-    # Get the full state of the organism at maximum growth
-    fully_grown_sol = model.fully_grown()
-    print(f"Entropy generation at maximum growth: {fully_grown_sol.entropy}")
-
     # Simulate the organism from birth with constant food density equal to 1. The returned solution contains the full
     # state of the organism, including powers, fluxes and entropy at all simulated time steps
-    sol = model.simulate(food_function=1, t_span=(0, 10000), step_size='auto', initial_state='birth')
+    # sol = model.simulate(food_function=1, t_span=(0, 1300), step_size='auto', initial_state='birth')
+
+    # Simulate with changing temperature (affects rate parameters)
+    def changing_temperature(organism, t, state_vars):
+        if state_vars[2] > organism.E_Hb:
+            organism.T = 298.15 + 5 * sin(t / 365)
+
+    # sol = model.simulate(food_function=1, t_span=(0, 10000), step_size='auto', initial_state='birth',
+    #                      transformation=changing_temperature)
+
+    # Simulate with change in diet
+    def diet_change(organism, t, state_vars):
+        if state_vars[2] >= 0:
+            organism.comp.X = composition.Compound.food(n=(1, 1.5, 0.69, 0.03))
+        else:
+            organism.comp.X = composition.Compound.food()
+
+
+    sol = model.simulate(food_function=1, t_span=(0, 10000), step_size='auto', initial_state='birth',
+                         transformation=diet_change)
 
     # Visualize the simulation
     viz = Plotter(sol)
