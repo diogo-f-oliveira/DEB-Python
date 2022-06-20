@@ -1,6 +1,7 @@
 import numpy as np
 from math import exp
-from composition import Composition
+from composition import Composition, Compound, RuminantComposition
+from copy import deepcopy
 
 
 class Pet:
@@ -75,10 +76,6 @@ class Pet:
         # Efficiencies must be lower than one
         if self.kap_X >= 1 or self.kap_P >= 1 or self.kap_R >= 1 or self.kap_G >= 1 or self.kappa >= 1:
             return False, "Efficiencies must be lower than one."
-
-        # Supply stress outside the supply-demand spectrum
-        if self.s_s >= 4 / 27:
-            return False, "Supply stress outside the supply-demand spectrum."
         return True, "All good!"
 
     def check_viability(self):
@@ -92,15 +89,38 @@ class Pet:
         # Constraint to reach puberty
         if (1 - self.kappa) * self._p_Am * (self.L_m ** 2) <= self._k_J * self.E_Hp:
             return False, "Impossible to reach puberty."
+        # Supply stress outside the supply-demand spectrum
+        if self.s_s >= 4 / 27:
+            return False, "Supply stress outside the supply-demand spectrum."
         return True, "All good!"
 
-    def convert_to_physical_length(self, V):
+    def compute_physical_length(self, V):
         """
         Converts a structure value to physical length using the shape coefficient del_M.
-        :param V: structure
-        :return: physical length
+        :param V: scalar or vector of structure
+        :return: scalar or vector of physical length
         """
         return V ** (1 / 3) / self.del_M
+
+    def compute_physical_volume(self, V, E, E_R):
+        """
+        Converts structure, reserve and reproduction buffer into physical volume
+        :param V: scalar or vector of structure
+        :param E: scalar or vector of reserve
+        :param E_R: scalar or vector of reproduction buffer
+        :return: scalar or vector of physical volume
+        """
+        return V + (E + E_R) * self.comp.E.w / self.comp.E.d / self.comp.E.mu
+
+    def compute_wet_weight(self, V, E, E_R):
+        """
+        Converts structure, reserve and reproduction buffer into wet weight
+        :param V: scalar or vector of structure
+        :param E: scalar or vector of reserve
+        :param E_R: scalar or vector of reproduction buffer
+        :return: scalar or vector of wet weight
+        """
+        return self.comp.V.d * V + (E + E_R) * self.comp.E.w / self.comp.E.mu
 
     def __getattr__(self, item):
         """Returns the value of temperature affected parameters corrected with the temperature correction factor TC.
@@ -111,6 +131,8 @@ class Pet:
             raise AttributeError  # Ensures that the behaviour for undefined parameters works as expected
 
     def __str__(self):
+        """Called when print(Pet) is called. Returns a description of the Pet, including the most relevant parameters
+        and chemical reactions."""
         description = f"Parameters at T={self.T} K\n" \
                       f"Surface-specific maximum assimilation rate: {self.p_Am:.6} (J/d.cm^2)\n" \
                       f"Allocation fraction to soma: {self.kappa} (-)\n" \
@@ -133,15 +155,25 @@ class Pet:
         Returns a dictionary with the aggregated chemical reactions complete with stoichiometry coefficients.
         :return: dictionary with the three aggregated chemical reactions as strings
         """
-        assimilation = f'{self.gamma_O[0, 0]:.4} X + {self.gamma_M[2, 0]:.4} O2 -> E + {-self.gamma_M[0, 0]:.4} CO2 ' \
-                       f'+ {-self.gamma_M[1, 0]:.4} H20 + {-self.gamma_M[3, 0]:.4} {self.comp.N.chemical_formula} + ' \
-                       f'{-self.gamma_O[3, 0]:.4} P'
+        reactions_right_side = []
+        reactions_left_side = []
+        for i in range(3):
+            right = ''
+            left = ''
+            for y, symbol in zip(self.gamma_M[:, i], self.comp.mineral_symbols):
+                if y < 0:
+                    left += f'{-y:.4} {symbol} + '
+                elif y > 0:
+                    right += f'{y:.4} {symbol} + '
+            reactions_left_side.append(left)
+            reactions_right_side.append(right)
 
-        dissipation = f'E + {self.gamma_M[2, 1]:.4} O2 ->  {-self.gamma_M[0, 1]:.4} CO2 + {-self.gamma_M[1, 1]:.4} H20 ' \
-                      f'+ {-self.gamma_M[3, 1]:.4} {self.comp.N.chemical_formula}'
+        assimilation = f'{-self.gamma_O[0, 0]:.4} X + {reactions_left_side[0][:-3]} -> ' \
+                       f'E + {reactions_right_side[0][:-3]} + {self.gamma_O[3, 0]:.4} P'
 
-        growth = f'E + {self.gamma_M[2, 2]:.4} O2 ->  {-self.gamma_O[1, 2]:.4} V + {-self.gamma_M[0, 2]:.4} CO2 + ' \
-                 f'{-self.gamma_M[1, 2]:.4} H20 + {-self.gamma_M[3, 2]:.4} {self.comp.N.chemical_formula}'
+        dissipation = f'E + {reactions_left_side[1][:-3]} -> {reactions_right_side[1][:-3]}'
+
+        growth = f'E + {reactions_left_side[2][:-3]} ->  {self.gamma_O[1, 2]:.4} V + {reactions_right_side[2][:-3]}'
 
         return {'assimilation': assimilation, 'dissipation': dissipation, 'growth': growth}
 
@@ -193,19 +225,6 @@ class Pet:
         return self.p_Am / self.kap_X
 
     @property
-    def eta_O(self):
-        """Computes the matrix of coefficients that couple mass fluxes of organic compounds to energy fluxes."""
-        return np.array([[-1 / (self.kap_X * self.comp.X.mu), 0, 0],
-                         [0, 0, self.comp.V.d / (self.E_G * self.comp.V.w)],
-                         [1 / self.comp.E.mu, -1 / self.comp.E.mu, -1 / self.comp.E.mu],
-                         [self.kap_P / (self.comp.P.mu * self.kap_X), 0, 0]])
-
-    @property
-    def eta_M(self):
-        """Computes the matrix of coefficients that couple mass fluxes of mineral compounds to energy fluxes."""
-        return -np.linalg.inv(self.comp.n_M) @ self.comp.n_O @ self.eta_O
-
-    @property
     def TC(self):
         """Temperature correction factor TC (-)."""
         return exp(self.T_A / self.T_ref - self.T_A / self.T)
@@ -234,10 +253,10 @@ class Pet:
     def gamma_O(self):
         """Computes the matrix of stoichiometry coefficients for organic compounds in the assimilation, dissipation and
         growth aggregated chemical reactions."""
-        return np.array([[self.y_XE, 0, 0],
-                         [0, 0, -self.y_VE],
-                         [-1, 1, 1],
-                         [-self.y_PE, 0, 0]])
+        return np.array([[-self.y_XE, 0, 0],
+                         [0, 0, self.y_VE],
+                         [1, -1, -1],
+                         [self.y_PE, 0, 0]])
 
     @property
     def gamma_M(self):
@@ -246,9 +265,101 @@ class Pet:
         return -np.linalg.inv(self.comp.n_M) @ self.comp.n_O @ self.gamma_O
 
     @property
+    def eta_O(self):
+        """Computes the matrix of coefficients that couple mass fluxes of organic compounds to energy fluxes."""
+        return self.gamma_O / self.comp.E.mu
+
+    @property
+    def eta_M(self):
+        """Computes the matrix of coefficients that couple mass fluxes of mineral compounds to energy fluxes."""
+        return self.gamma_M / self.comp.E.mu
+
+    @property
     def s_s(self):
         """Supply Stress (-)."""
         return self._k_J * self.E_Hp * (self._p_M ** 2) / (self._p_Am ** 3)
+
+    @property
+    def L_T(self):
+        """Heating Length (cm)."""
+        return self._p_T / self._p_M
+
+    def ultimate_length(self, f):
+        """Ultimate Length (cm)."""
+        return f * self.L_m - self.L_T
+
+
+class Ruminant(Pet):
+    """
+        class Ruminant:
+
+        Child class of Pet.
+        Assumes assimilation occurs in two sub transformations, one that produces CO2 and another that produces CH4. The
+        assimilation reaction is a weighted average of both sub transformations.
+        """
+    def __init__(self, p_Am, kappa, v, p_M, E_G, k_J, E_Hb, E_Hp, kap_R, rum_fraction, comp=None, p_T=0, kap_X=0.8,
+                 kap_P=0.1,
+                 E_0=1e6, V_0=1e-12, T_A=8000, T_ref=293.15, T=298.15, del_M=1, **additional_parameters):
+
+        super().__init__(p_Am, kappa, v, p_M, E_G, k_J, E_Hb, E_Hp, kap_R, comp=comp, p_T=p_T, kap_X=kap_X, kap_P=kap_P,
+                         E_0=E_0, V_0=V_0, T_A=T_A, T_ref=T_ref, T=T, del_M=del_M, **additional_parameters)
+        # Chemical composition
+        if comp is None:
+            self.comp = RuminantComposition()
+        elif isinstance(comp, (list, tuple)):
+            self.comp = RuminantComposition(*comp)
+        elif isinstance(comp, dict):
+            self.comp = RuminantComposition(**comp)
+        elif isinstance(comp, RuminantComposition):
+            self.comp = comp
+        else:
+            raise Exception("Invalid Composition input. Must be of class RuminantComposition.")
+
+        self.rum_fraction = rum_fraction  # Rumination fraction (-)
+
+    @property
+    def gamma_M(self):
+        """Computes the matrix of stoichiometry coefficients for mineral compounds in the assimilation, dissipation and
+        growth aggregated chemical reactions."""
+        gamma_M = np.pad(self.gamma_M_CO2, ((0, 1), (0, 0)))
+        gamma_M[:, 0] = gamma_M[:, 0] * (1 - self.rum_fraction) + \
+                        np.pad(self.gamma_M_CH4[:, 0], (1, 0)) * self.rum_fraction
+        return gamma_M
+
+    @property
+    def gamma_M_CO2(self):
+        """Computes the matrix of stoichiometry coefficients for mineral compounds in the assimilation, dissipation and
+        growth aggregated chemical reactions assuming methane (CH4) production does not occur."""
+        return -np.linalg.inv(self.comp.n_M[:, :-1]) @ self.comp.n_O @ self.gamma_O
+
+    @property
+    def gamma_M_CH4(self):
+        """Computes the matrix of stoichiometry coefficients for mineral compounds in the assimilation, dissipation and
+        growth aggregated chemical reactions assuming methane (CH4) production occurs instead of CO2."""
+        return -np.linalg.inv(self.comp.n_M[:, 1:]) @ self.comp.n_O @ self.gamma_O
+
+    @property
+    def eta_M_CO2(self):
+        """Computes the matrix of coefficients that couple mass fluxes of mineral compounds to energy fluxes, assuming
+        methane (CH4) production does not occur."""
+        return self.gamma_M_CO2 / self.comp.E.mu
+
+    @property
+    def eta_M_CH4(self):
+        """Computes the matrix of coefficients that couple mass fluxes of mineral compounds to energy fluxes assuming
+        methane (CH4) production occurs instead of CO2."""
+        return self.gamma_M_CH4 / self.comp.E.mu
+
+    @property
+    def gamma_M_ext(self):
+        """Computes the matrix of stoichiometry coefficients for mineral compounds in the assimilation, dissipation and
+        growth aggregated chemical reactions, as well as the sub transformations of assimilation that produce CO2 and
+        CH4."""
+        gamma_M = np.zeros((5, 5))
+        gamma_M[1:5, 1] = self.gamma_M_CH4
+        gamma_M[0:4, 2:] = self.gamma_M_CO2
+        gamma_M[:, 0] = gamma_M[:, 2] * (1 - self.rum_fraction) + gamma_M[:, 1] * self.rum_fraction
+        return gamma_M
 
 
 # Dictionary with parameters for several commom organisms. Usage with Pet class is: Pet(**animals[pet_name])
@@ -261,8 +372,9 @@ animals = {
                   E_Hb=4.81e+6, E_Hp=8.726e+7, E_Hx=1.346e+7, t_0=26.8217, f_milk=1),
     'bos_taurus_alentejana': dict(E_G=8261.79, p_Am=2501.03, v=0.107224, p_M=42.2556, kappa=0.976264, k_J=0.0002,
                                   kap_R=0.95, E_Hb=2071229.972, E_Hp=30724119.81, E_Hx=15139260.45, t_0=109.4715964,
-                                  f_milk=1, del_M=0.349222, kap_X=0.3),
+                                  f_milk=1, del_M=0.349222, kap_X=0.3, rum_fraction=0.3),
 }
 
 if __name__ == '__main__':
-    muskox = Pet(**animals['muskox'])
+    cow = Pet(**animals['bos_taurus_alentejana'])
+    self = Ruminant(**animals['bos_taurus_alentejana'])

@@ -34,15 +34,17 @@ class TimeInstantSol:
         self.p_A, self.p_C, self.p_S, self.p_G, self.p_J, self.p_R, self.p_D = powers
 
         # Fluxes
-        self.mineral_fluxes = model.mineral_fluxes(self.p_A, self.p_D, self.p_G)
+        self.mineral_fluxes = model.mineral_fluxes(self.p_A, self.p_D, self.p_G, self.E_H)
         # Entropy
-        self.entropy = model.entropy_generation(self.p_A, self.p_D, self.p_G)[0]
+        self.entropy = model.entropy_generation(self.p_A, self.p_D, self.p_G, self.E_H)[0]
         # Physical Length
         self.calculate_real_variables()
 
     def calculate_real_variables(self):
         """Computes real variables such as physical length, etc... (WIP)"""
-        self.physical_length = self.organism.convert_to_physical_length(self.V)
+        self.physical_length = self.organism.compute_physical_length(self.V)
+        self.physical_volume = self.organism.compute_physical_volume(self.V, self.E, self.E_R)
+        self.wet_weight = self.organism.compute_wet_weight(self.V, self.E, self.E_R)
 
 
 class TimeIntervalSol(MutableSequence):
@@ -62,7 +64,7 @@ class TimeIntervalSol(MutableSequence):
 
         self._time_instant_sols = []
         self.t = ode_sol.t
-        self._time_to_index = {self.t[i]:i for i in range(len(self.t))}
+        self._time_to_index = {self.t[i]: i for i in range(len(self.t))}
 
         self.E, self.V, self.E_H, self.E_R = ode_sol.y
 
@@ -85,6 +87,26 @@ class TimeIntervalSol(MutableSequence):
             elif not self.time_of_puberty and E_H > self.model.organism.E_Hp:
                 self.time_of_puberty = t
 
+    def to_csv(self, variables, csv_filename=None):
+        """
+        Saves the time steps and variables of TimeIntervalSol to a .csv file.
+        :param variables: string or list of strings of variable names
+        :param csv_filename: optional, name of .csv file to save values. If omitted, the filename will be generated
+        using the variable names.
+        """
+        if not isinstance(variables, (list, tuple)):
+            variables = list(variables)
+        if csv_filename is None:
+            csv_filename = f"{'-'.join(variables)}.csv"
+        var_data = []
+        for v in variables:
+            if hasattr(self, v):
+                var_data.append(getattr(self, v))
+        with open(csv_filename, 'w') as f:
+            print(f"time,{','.join(variables)}", file=f)
+            for data in zip(self.t, *var_data):
+                print(f"{str(data).replace(' ','')[1:-1]}", file=f)
+
     def __getitem__(self, time_step):
         # TODO: Interpolate when the time step does not exist.
         if isinstance(time_step, int):
@@ -106,6 +128,7 @@ class TimeIntervalSol(MutableSequence):
     def insert(self, index: int, value) -> None:
         return
 
+    #TODO: Replace by __getattr__ fetching from TimeInstantSol
     @property
     def p_A(self):
         return np.array([sol.p_A for sol in self._time_instant_sols])
@@ -145,3 +168,11 @@ class TimeIntervalSol(MutableSequence):
     @property
     def physical_length(self):
         return np.array([sol.physical_length for sol in self._time_instant_sols])
+
+    @property
+    def physical_volume(self):
+        return np.array([sol.physical_volume for sol in self._time_instant_sols])
+
+    @property
+    def wet_weight(self):
+        return np.array([sol.wet_weight for sol in self._time_instant_sols])

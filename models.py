@@ -1,6 +1,6 @@
 from scipy.integrate import solve_ivp
 import numpy as np
-from pet import Pet
+from pet import Pet, Ruminant
 import solution
 
 
@@ -43,7 +43,7 @@ class STD:
         if not valid:
             raise Exception(f"Invalid Pet parameters. {reason}")
 
-    def simulate(self, t_span, food_function=1, step_size='auto', initial_state='birth', transformation=None):
+    def simulate(self, t_span, food_function=1, step_size='auto', initial_state='embryo', transformation=None):
         """
         Integrates state equations over time. The output from the solver is stored in self.ode_sol.
 
@@ -63,7 +63,7 @@ class STD:
         """
 
         # Get initial state
-        if initial_state == 'birth':
+        if initial_state == 'embryo':
             initial_state = (self.organism.E_0, self.organism.V_0, 0, 0)
         elif len(initial_state) != 4:
             raise Exception(f"Invalid input {initial_state} for initial state. The initial state must be a list or "
@@ -114,8 +114,8 @@ class STD:
         self.food_function = lambda t: f
 
         # State variables at full growth
-        state_vars = (self.organism.E_m * (f * self.organism.L_m) ** 3,
-                      (f * self.organism.L_m) ** 3,
+        state_vars = (self.organism.E_m * (self.organism.ultimate_length(f)) ** 3,
+                      (self.organism.ultimate_length(f)) ** 3,
                       self.organism.E_Hp,
                       E_R)
         return solution.TimeInstantSol(self, 0, state_vars)
@@ -222,7 +222,7 @@ class STD:
         :param V: Scalar or array of Structure values
         :return: Scalar or array of somatic maintenance power p_S values
         """
-        return self.organism.p_M * V
+        return self.organism.p_M * V + self.organism.p_T * (V ** (2 / 3))
 
     def p_G(self, p_C, p_S):
         """
@@ -289,7 +289,7 @@ class STD:
             else:
                 return p_S + p_J + (1 - self.organism.kap_R) * p_R
 
-    def mineral_fluxes(self, p_A, p_D, p_G):
+    def mineral_fluxes(self, p_A, p_D, p_G, E_H):
         """
         Computes the mineral fluxes from the assimilation power p_A, dissipation power p_D and growth power p_G.
 
@@ -306,7 +306,7 @@ class STD:
         powers = np.array([p_A, p_D, p_G])
         return self.organism.eta_M @ powers
 
-    def entropy_generation(self, p_A, p_D, p_G):
+    def entropy_generation(self, p_A, p_D, p_G, E_H):
         """
         Computes the entropy from the assimilation power p_A, dissipation power p_D and growth power p_G.
         :param p_A: Scalar or array of assimilation power values
@@ -319,8 +319,8 @@ class STD:
             p_D = np.array([p_D])
             p_G = np.array([p_G])
         powers = np.array([p_A, p_D, p_G])
-        return -(self.organism.comp.h_M @ np.linalg.inv(self.organism.comp.n_M) @ self.organism.comp.n_O
-                 - self.organism.comp.h_O) @ self.organism.gamma_O @ powers / self.organism.T / self.organism.comp.E.mu
+        return (self.organism.comp.h_M @ np.linalg.inv(self.organism.comp.n_M) @ self.organism.comp.n_O
+                - self.organism.comp.h_O) @ self.organism.gamma_O @ powers / self.organism.T / self.organism.comp.E.mu
 
 
 class STX(STD):
@@ -337,18 +337,6 @@ class STX(STD):
         Integrates all state variables over time according to an input function of scaled functional feeding response
         (f) over time.
     """
-
-    def __init__(self, organism):
-        """Takes as input a Pet class or a dictionary of parameters to create a Pet class."""
-
-        # Create the Pet class from the dictionary of parameters
-        if isinstance(organism, dict):
-            organism = Pet(**organism)
-        # Check that organism is a Pet class
-        elif not isinstance(organism, Pet):
-            raise Exception("Input must be of class Pet or a dictionary of parameters to create a Pet class.")
-
-        super().__init__(organism)
 
     def filter_pet(self, organism):
         """Ensures that the parameters of Pet are valid and that the required parameters for model STX, t_0 and E_Hx,
@@ -520,3 +508,69 @@ class STX(STD):
                 return (1 - self.organism.kappa) * (p_S + p_G) / self.organism.kappa - p_J
             else:
                 return (1 - self.organism.kappa) * p_C - p_J
+
+
+class RUM(STX):
+    def __init__(self, organism):
+        """Takes as input a Ruminant class or a dictionary of parameters to create a Pet class."""
+
+        # Create the Pet class from the dictionary of parameters
+        if isinstance(organism, dict):
+            organism = Ruminant(**organism)
+        # Check that organism is a Pet class
+        elif not isinstance(organism, Ruminant):
+            raise Exception("Input must be of class Ruminant or a dictionary of parameters to create a Ruminant class.")
+
+        self.filter_pet(organism)
+
+        self.organism = organism
+        self.ode_sol = None  # Output from ODE solver
+        self.sol = None  # Full solution including powers, fluxes and entropy
+        self.food_function = None  # Function of scaled functional feeding response (f) over time
+
+    def mineral_fluxes(self, p_A, p_D, p_G, E_H):
+        """
+        Computes the mineral fluxes using the basic organic powers. Until weaning, the organism does not ruminate and
+        therefore the standard assimilation equation applies. Afterwards, both sub transformations occur. The mineral
+        fluxes are in following format (CO2, H2O, O2, N-Waste, CH4).
+        :param p_A: scalar of assimilation power
+        :param p_D: scalar of dissipation power
+        :param p_G: scalar of growth power
+        :param E_H: scalar of maturity
+        :return: (5,1) np.ndarray of mineral fluxes
+        """
+        if type(p_A) != np.ndarray:
+            p_A = np.array([p_A])
+            p_D = np.array([p_D])
+            p_G = np.array([p_G])
+        powers = np.array([p_A, p_D, p_G])
+
+        if E_H < self.organism.E_Hx:  # Use standard assimilation reaction
+            mineral_fluxes = self.organism.eta_M_CO2 @ powers
+            mineral_fluxes = np.pad(mineral_fluxes, ((0, 1), (0, 0)))
+        else:  # Consider production of methane during rumination
+            eta_M = self.organism.eta_M
+            mineral_fluxes = eta_M @ powers
+        return mineral_fluxes
+
+    def entropy_generation(self, p_A, p_D, p_G, E_H):
+        """
+        Computes the entropy generated using the basic organic powers. Until weaning, the organism does not ruminate and
+        therefore the standard assimilation equation applies. Afterwards, both sub transformations occur.
+        :param p_A: scalar of assimilation power
+        :param p_D: scalar of dissipation power
+        :param p_G: scalar of growth power
+        :param E_H: scalar of maturity
+        :return: scalar of entropy
+        """
+        if type(p_A) != np.ndarray:
+            p_A = np.array([p_A])
+            p_D = np.array([p_D])
+            p_G = np.array([p_G])
+        powers = np.array([p_A, p_D, p_G])
+        if E_H < self.organism.E_Hx:  # Use standard assimilation reaction
+            return -(self.organism.comp.h_M[:-1] @ self.organism.gamma_M_CO2 + self.organism.comp.h_O @
+                     self.organism.gamma_O) @ powers / self.organism.T / self.organism.comp.E.mu
+        else:  # Consider production of methane during rumination
+            return -(self.organism.comp.h_M @ self.organism.gamma_M + self.organism.comp.h_O @ self.organism.gamma_O) \
+                   @ powers / self.organism.T / self.organism.comp.E.mu

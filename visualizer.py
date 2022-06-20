@@ -60,9 +60,11 @@ class Plotter:
 
     def plot_real_variables(self):
         """Plots the evolution of real variables such as physical length."""
-        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(16, 9), tight_layout=True, num="Real Variables")
+        fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(16, 9), tight_layout=True, num="Real Variables")
 
         self.plot_vs_time(axes[0], self.sol.physical_length, 'Physical Length', 'cm')
+        self.plot_vs_time(axes[1], self.sol.physical_volume, 'Physical Volume', 'cm$^3$')
+        self.plot_vs_time(axes[2], self.sol.wet_weight, 'Wet Weight', 'g')
 
         fig.show()
 
@@ -90,7 +92,9 @@ class Plotter:
         Adds vertical lines to a plot to represent stage transitions.
         :param ax: Matplotlib Axes instance
         """
-        ax.axvline(x=self.sol.time_of_birth, linestyle=':', color='k')
-        ax.axvline(x=self.sol.time_of_puberty, linestyle=':', color='k')
+        if self.sol.time_of_birth:
+            ax.axvline(x=self.sol.time_of_birth, linestyle=':', color='k')
+        if self.sol.time_of_puberty:
+            ax.axvline(x=self.sol.time_of_puberty, linestyle=':', color='k')
         if self.sol.time_of_weaning:
             ax.axvline(x=self.sol.time_of_weaning, linestyle=':', color='k')
