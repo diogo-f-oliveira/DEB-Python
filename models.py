@@ -44,6 +44,7 @@ class STD:
             raise Exception(f"Invalid Pet parameters. {reason}")
 
     def simulate(self, t_span, food_function=1, step_size='auto', initial_state='embryo', transformation=None):
+        # TODO: Add events argument for solve_ivp
         """
         Integrates state equations over time. The output from the solver is stored in self.ode_sol.
 
@@ -62,12 +63,25 @@ class STD:
         or temperature.
         """
 
+        # Define the times at which the solver should store the computed solution.
+        if step_size == 'auto':
+            t_eval = None
+        elif isinstance(step_size, (float, int)):
+            t_eval = np.arange(*t_span, step_size)
+        else:
+            raise Exception(f"Invalid step size value: {step_size}. Please select 'auto' for automatic step size during"
+                            f" integration or input a fixed step size.")
+
         # Get initial state
         if initial_state == 'embryo':
             initial_state = (self.organism.E_0, self.organism.V_0, 0, 0)
+        elif initial_state == 'birth':
+            initial_state = self.get_state_at_maturity(self.organism.E_Hb)
+        elif initial_state == 'puberty':
+            initial_state = self.get_state_at_maturity(self.organism.E_Hp)
         elif len(initial_state) != 4:
             raise Exception(f"Invalid input {initial_state} for initial state. The initial state must be a list or "
-                            f"tuple of length 4 with format (E, V, E_H, E_R).")
+                            f"tuple of length 4 with format (E, V, E_H, E_R) or a specified keyword.")
 
         # Store the food function
         if isinstance(food_function, (float, int)):
@@ -80,15 +94,6 @@ class STD:
         else:
             raise Exception("Argument food_function must be a number between 0 and 1 or callable.")
 
-        # Define the times at which the solver should store the computed solution.
-        if step_size == 'auto':
-            t_eval = None
-        elif isinstance(step_size, (float, int)):
-            t_eval = np.arange(*t_span, step_size)
-        else:
-            raise Exception(f"Invalid step size value: {step_size}. Please select 'auto' for automatic step size during"
-                            f" integration or input a fixed step size.")
-
         # Transformations to Pet parameters during simulation
         if callable(transformation):
             self.transform = transformation
@@ -100,7 +105,21 @@ class STD:
         self.sol = solution.TimeIntervalSol(self, self.ode_sol)
         return self.sol
 
+    # TODO: function to find state at input maturity level
+    def get_state_at_maturity(self, E_H):
+        event = lambda t, states: states[2] - E_H
+        event.terminal = True
+        embryo_state = (self.organism.E_0, self.organism.V_0, 0, 0)
+        self.food_function = lambda t: 1
+        ode_sol = solve_ivp(self.state_changes, (0,1e6), embryo_state, max_step=self.MAX_STEP_SIZE, events=event)
+        if ode_sol.status != 1:
+            raise Exception(f"Simulation couldn't reach maturity level {E_H}. Can't start simulation without an "
+                            f"initial state.")
+
+        return ode_sol.y[:, -1]
+
     def transform(self, organism, t, state_vars):
+        """Function to be overriden during simulation. Applies a transformation to the parameters of the organism."""
         return
 
     def fully_grown(self, f=1, E_R=0):
@@ -289,13 +308,30 @@ class STD:
             else:
                 return p_S + p_J + (1 - self.organism.kap_R) * p_R
 
-    def mineral_fluxes(self, p_A, p_D, p_G, E_H):
+    def organic_fluxes(self, p_A, p_D, p_G, E_H):
         """
-        Computes the mineral fluxes from the assimilation power p_A, dissipation power p_D and growth power p_G.
-
+        Computes the organic fluxes from the assimilation power p_A, dissipation power p_D and growth power p_G.
         :param p_A: Scalar or array of assimilation power values
         :param p_D: Scalar or array of dissipation power values
         :param p_G: Scalar or array of growth power values
+        :param E_H: Maturity level
+        :return: array of mineral fluxes values. Each row corresponds to the flux of CO2, H2O, O2 and N-Waste
+            respectively.
+        """
+        if type(p_A) != np.ndarray:
+            p_A = np.array([p_A])
+            p_D = np.array([p_D])
+            p_G = np.array([p_G])
+        powers = np.array([p_A, p_D, p_G])
+        return self.organism.eta_O @ powers
+
+    def mineral_fluxes(self, p_A, p_D, p_G, E_H):
+        """
+        Computes the mineral fluxes from the assimilation power p_A, dissipation power p_D and growth power p_G.
+        :param p_A: Scalar or array of assimilation power values
+        :param p_D: Scalar or array of dissipation power values
+        :param p_G: Scalar or array of growth power values
+        :param E_H: Maturity level
         :return: array of mineral fluxes values. Each row corresponds to the flux of CO2, H2O, O2 and N-Waste
             respectively.
         """
@@ -362,6 +398,12 @@ class STX(STD):
             setattr(organism, 'E_density_mother', organism.E_m)
         # Set initial reserve E_0
         setattr(organism, 'E_0', organism.E_density_mother * organism.V_0)
+
+    def simulate(self, t_span, food_function=1, step_size='auto', initial_state='embryo', transformation=None):
+        if initial_state == 'weaning':
+            initial_state = self.get_state_at_maturity(self.organism.E_Hx)
+        return super().simulate(t_span=t_span, food_function=food_function, step_size=step_size, initial_state=initial_state,
+                         transformation=transformation)
 
     def state_changes(self, t, state_vars):
         """

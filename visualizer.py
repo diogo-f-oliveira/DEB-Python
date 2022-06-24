@@ -39,6 +39,17 @@ class Plotter:
 
         fig.show()
 
+    def plot_organic_fluxes(self):
+        """Plots the evolution of the organic fluxes."""
+        fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(16, 9), tight_layout=True, num="Organic Fluxes")
+
+        self.plot_vs_time(axes[0, 0], self.sol.organic_fluxes[0], 'Food Flux', 'mol/d')
+        self.plot_vs_time(axes[0, 1], self.sol.organic_fluxes[1], 'Reserve Flux', 'mol/d')
+        self.plot_vs_time(axes[1, 0], self.sol.organic_fluxes[2], 'Reserve and Reproduction Buffer Flux', 'mol/d')
+        self.plot_vs_time(axes[1, 1], self.sol.organic_fluxes[3], 'Feces Flux', 'mol/d')
+
+        fig.show()
+
     def plot_mineral_fluxes(self):
         """Plots the evolution of the mineral fluxes."""
         fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(16, 9), tight_layout=True, num="Mineral Fluxes")
@@ -60,11 +71,12 @@ class Plotter:
 
     def plot_real_variables(self):
         """Plots the evolution of real variables such as physical length."""
-        fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(16, 9), tight_layout=True, num="Real Variables")
+        fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(16, 9), tight_layout=True, num="Real Variables")
 
-        self.plot_vs_time(axes[0], self.sol.physical_length, 'Physical Length', 'cm')
-        self.plot_vs_time(axes[1], self.sol.physical_volume, 'Physical Volume', 'cm$^3$')
-        self.plot_vs_time(axes[2], self.sol.wet_weight, 'Wet Weight', 'g')
+        self.plot_vs_time(axes[0, 0], self.sol.physical_length, 'Physical Length', 'cm')
+        self.plot_vs_time(axes[0, 1], self.sol.physical_volume, 'Physical Volume', 'cm$^3$')
+        self.plot_vs_time(axes[1, 0], self.sol.wet_weight, 'Wet Weight', 'g')
+        self.plot_vs_time(axes[1, 1], self.sol.dry_weight, 'Dry Weight', 'g')
 
         fig.show()
 

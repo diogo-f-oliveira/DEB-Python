@@ -38,7 +38,8 @@ if __name__ == '__main__':
 
     # Simulate the organism from birth with constant food density equal to 1. The returned solution contains the full
     # state of the organism, including powers, fluxes and entropy at all simulated time steps
-    sol = model.simulate(food_function=1, t_span=(0, 1300), step_size='auto', initial_state='embryo')
+    # sol = model.simulate(food_function=1, t_span=(0, 10300), step_size='auto', initial_state='embryo')
+    sol = model.simulate(food_function=1, t_span=(0, 30*6), step_size='auto', initial_state='weaning')
 
     # Simulate with changing temperature (affects rate parameters)
     def changing_temperature(organism, t, state_vars):
@@ -63,9 +64,13 @@ if __name__ == '__main__':
 
     # sol = model.fully_grown()
     # print(sol.entropy)
+    print(f"DFI: {sol.daily_feed_intake:.5} g\n"
+          f"ADG: {sol.average_daily_gain:.4} g\n"
+          f"FCR: {sol.feed_consumption_ratio:.4}\n"
+          f"RGR: {sol.relative_growth_rate*100:.4} %")
 
     # Visualize the simulation
-    # viz = Plotter(sol)
+    viz = Plotter(sol)
     #
     # viz.plot_state_vars()
     # viz.plot_powers()

@@ -1,6 +1,6 @@
-from abc import abstractmethod
 from collections.abc import MutableSequence
 import numpy as np
+from scipy.integrate import simpson
 
 
 class TimeInstantSol:
@@ -34,6 +34,7 @@ class TimeInstantSol:
         self.p_A, self.p_C, self.p_S, self.p_G, self.p_J, self.p_R, self.p_D = powers
 
         # Fluxes
+        self.organic_fluxes = model.organic_fluxes(self.p_A, self.p_D, self.p_G, self.E_H)
         self.mineral_fluxes = model.mineral_fluxes(self.p_A, self.p_D, self.p_G, self.E_H)
         # Entropy
         self.entropy = model.entropy_generation(self.p_A, self.p_D, self.p_G, self.E_H)[0]
@@ -45,6 +46,7 @@ class TimeInstantSol:
         self.physical_length = self.organism.compute_physical_length(self.V)
         self.physical_volume = self.organism.compute_physical_volume(self.V, self.E, self.E_R)
         self.wet_weight = self.organism.compute_wet_weight(self.V, self.E, self.E_R)
+        self.dry_weight = self.organism.compute_dry_weight(self.V, self.E, self.E_R)
 
 
 class TimeIntervalSol(MutableSequence):
@@ -62,14 +64,12 @@ class TimeIntervalSol(MutableSequence):
         """
         self.model = model
 
-        self._time_instant_sols = []
         self.t = ode_sol.t
         self._time_to_index = {self.t[i]: i for i in range(len(self.t))}
 
         self.E, self.V, self.E_H, self.E_R = ode_sol.y
 
-        for i in range(len(self.t)):
-            self._time_instant_sols.append(TimeInstantSol(self.model, self.t[i], ode_sol.y[:, i]))
+        self._time_instant_sols = [TimeInstantSol(self.model, self.t[i], ode_sol.y[:, i]) for i in range(len(self.t))]
 
         self.time_of_birth = None
         self.time_of_weaning = None
@@ -105,7 +105,7 @@ class TimeIntervalSol(MutableSequence):
         with open(csv_filename, 'w') as f:
             print(f"time,{','.join(variables)}", file=f)
             for data in zip(self.t, *var_data):
-                print(f"{str(data).replace(' ','')[1:-1]}", file=f)
+                print(f"{str(data).replace(' ', '')[1:-1]}", file=f)
 
     def __getitem__(self, time_step):
         # TODO: Interpolate when the time step does not exist.
@@ -128,51 +128,35 @@ class TimeIntervalSol(MutableSequence):
     def insert(self, index: int, value) -> None:
         return
 
-    #TODO: Replace by __getattr__ fetching from TimeInstantSol
-    @property
-    def p_A(self):
-        return np.array([sol.p_A for sol in self._time_instant_sols])
+    # TODO: See if adding attributes to self.__dict__ helps in any way
+    def __getattr__(self, item):
+        tsol = self._time_instant_sols[-1]
+        if hasattr(tsol, item):
+            if isinstance(getattr(tsol, item), np.ndarray):
+                return np.concatenate([getattr(sol, item) for sol in self._time_instant_sols], axis=1)
+            else:
+                return np.array([getattr(sol, item) for sol in self._time_instant_sols])
+        else:
+            raise AttributeError
 
     @property
-    def p_C(self):
-        return np.array([sol.p_C for sol in self._time_instant_sols])
+    def total_feed_intake(self):
+        return -simpson(self.organic_fluxes[0, :], self.t) * self._time_instant_sols[-1].organism.comp.X.w
 
     @property
-    def p_S(self):
-        return np.array([sol.p_S for sol in self._time_instant_sols])
+    def daily_feed_intake(self):
+        return self.total_feed_intake / (self.t[-1] - self.t[0])
 
     @property
-    def p_G(self):
-        return np.array([sol.p_G for sol in self._time_instant_sols])
+    def average_daily_gain(self):
+        return (self._time_instant_sols[-1].wet_weight - self._time_instant_sols[0].wet_weight) / \
+               (self.t[-1] - self.t[0])
 
     @property
-    def p_J(self):
-        return np.array([sol.p_J for sol in self._time_instant_sols])
+    def feed_consumption_ratio(self):
+        return self.total_feed_intake / (self._time_instant_sols[-1].wet_weight - self._time_instant_sols[0].wet_weight)
 
     @property
-    def p_R(self):
-        return np.array([sol.p_R for sol in self._time_instant_sols])
-
-    @property
-    def p_D(self):
-        return np.array([sol.p_D for sol in self._time_instant_sols])
-
-    @property
-    def mineral_fluxes(self):
-        return np.concatenate([sol.mineral_fluxes for sol in self._time_instant_sols], axis=1)
-
-    @property
-    def entropy(self):
-        return np.array([sol.entropy for sol in self._time_instant_sols])
-
-    @property
-    def physical_length(self):
-        return np.array([sol.physical_length for sol in self._time_instant_sols])
-
-    @property
-    def physical_volume(self):
-        return np.array([sol.physical_volume for sol in self._time_instant_sols])
-
-    @property
-    def wet_weight(self):
-        return np.array([sol.wet_weight for sol in self._time_instant_sols])
+    def relative_growth_rate(self):
+        return (np.log(self._time_instant_sols[-1].wet_weight) - np.log(self._time_instant_sols[0].wet_weight)) / \
+               (self.t[-1] - self.t[0])

@@ -104,7 +104,7 @@ class Pet:
 
     def compute_physical_volume(self, V, E, E_R):
         """
-        Converts structure, reserve and reproduction buffer into physical volume
+        Converts structure, reserve and reproduction buffer into physical volume.
         :param V: scalar or vector of structure
         :param E: scalar or vector of reserve
         :param E_R: scalar or vector of reproduction buffer
@@ -114,7 +114,17 @@ class Pet:
 
     def compute_wet_weight(self, V, E, E_R):
         """
-        Converts structure, reserve and reproduction buffer into wet weight
+        Converts structure, reserve and reproduction buffer into wet weight. Assumes density of reserve d_V equal to 1
+        :param V: scalar or vector of structure
+        :param E: scalar or vector of reserve
+        :param E_R: scalar or vector of reproduction buffer
+        :return: scalar or vector of wet weight
+        """
+        return V + (E + E_R) * self.comp.E.w / self.comp.E.mu
+
+    def compute_dry_weight(self, V, E, E_R):
+        """
+        Converts structure, reserve and reproduction buffer into dry weight.
         :param V: scalar or vector of structure
         :param E: scalar or vector of reserve
         :param E_R: scalar or vector of reproduction buffer
@@ -297,6 +307,7 @@ class Ruminant(Pet):
         Assumes assimilation occurs in two sub transformations, one that produces CO2 and another that produces CH4. The
         assimilation reaction is a weighted average of both sub transformations.
         """
+
     def __init__(self, p_Am, kappa, v, p_M, E_G, k_J, E_Hb, E_Hp, kap_R, rum_fraction, comp=None, p_T=0, kap_X=0.8,
                  kap_P=0.1,
                  E_0=1e6, V_0=1e-12, T_A=8000, T_ref=293.15, T=298.15, del_M=1, **additional_parameters):
