@@ -20,7 +20,7 @@ class TimeInstantSol:
         """
         self.model_type = type(model).__name__
 
-        self.organism = model.organism
+        self.organism = model.organism  # This is just a pointer to the organism, not a copy
 
         # Save state variables
         self.t = t
@@ -48,6 +48,8 @@ class TimeInstantSol:
         self.wet_weight = self.organism.compute_wet_weight(self.V, self.E, self.E_R)
         self.dry_weight = self.organism.compute_dry_weight(self.V, self.E, self.E_R)
 
+        self.feed_intake = (self.organic_fluxes[0] * self.organism.comp.X.w)[0]
+
 
 class TimeIntervalSol(MutableSequence):
     """
@@ -69,7 +71,7 @@ class TimeIntervalSol(MutableSequence):
 
         self.E, self.V, self.E_H, self.E_R = ode_sol.y
 
-        self._time_instant_sols = [TimeInstantSol(self.model, self.t[i], ode_sol.y[:, i]) for i in range(len(self.t))]
+        self.time_instant_sols = [TimeInstantSol(self.model, self.t[i], ode_sol.y[:, i]) for i in range(len(self.t))]
 
         self.time_of_birth = None
         self.time_of_weaning = None
@@ -108,12 +110,31 @@ class TimeIntervalSol(MutableSequence):
                 print(f"{str(data).replace(' ', '')[1:-1]}", file=f)
 
     def __getitem__(self, time_step):
-        # TODO: Interpolate when the time step does not exist.
+        # TODO: Check for time steps outside of simulation time
         if isinstance(time_step, int):
-            return self._time_instant_sols[time_step]
+            return self.time_instant_sols[time_step]
         elif isinstance(time_step, (float, np.float64)):
             if time_step in self._time_to_index:
-                return self._time_instant_sols[self._time_to_index[time_step]]
+                return self.time_instant_sols[self._time_to_index[time_step]]
+            # Interpolate if time_step doesn't exist
+            else:
+                ti2 = self.find_closest_time_step(time_step)
+                ti1 = ti2 - 1
+                sol1 = self.time_instant_sols[ti1]
+                sol2 = self.time_instant_sols[ti2]
+                t1, t2 = sol1.t, sol2.t
+                st1 = np.array([sol1.E, sol1.V, sol1.E_H, sol1.E_R])
+                st2 = np.array([sol2.E, sol2.V, sol2.E_H, sol2.E_R])
+
+                state = (st2 - st1) / (t2 - t1) * (time_step - t1) + st1
+                return TimeInstantSol(self.model, time_step, state)
+
+    def find_closest_time_step(self, time_step):
+        for i, t in enumerate(self.t):
+            if t > time_step:
+                t_i = i
+                break
+        return t_i
 
     def __setitem__(self, key, value):
         return
@@ -130,33 +151,43 @@ class TimeIntervalSol(MutableSequence):
 
     # TODO: See if adding attributes to self.__dict__ helps in any way
     def __getattr__(self, item):
-        tsol = self._time_instant_sols[-1]
+        tsol = self.time_instant_sols[-1]
         if hasattr(tsol, item):
             if isinstance(getattr(tsol, item), np.ndarray):
-                return np.concatenate([getattr(sol, item) for sol in self._time_instant_sols], axis=1)
+                return np.concatenate([getattr(sol, item) for sol in self.time_instant_sols], axis=1)
             else:
-                return np.array([getattr(sol, item) for sol in self._time_instant_sols])
+                return np.array([getattr(sol, item) for sol in self.time_instant_sols])
         else:
             raise AttributeError
 
-    @property
-    def total_feed_intake(self):
-        return -simpson(self.organic_fluxes[0, :], self.t) * self._time_instant_sols[-1].organism.comp.X.w
+    def total_feed_intake(self, t1=0, t2=-1):
+        if t2 > -1:
+            t2 += 1
+        elif t2 == -1:
+            t2 = self.__len__()
+        return -simpson(self.feed_intake[t1:t2], self.t[t1:t2])
 
-    @property
-    def daily_feed_intake(self):
-        return self.total_feed_intake / (self.t[-1] - self.t[0])
+    def daily_feed_intake(self, t1=0, t2=-1):
+        return self.total_feed_intake(t1, t2) / (self.t[t2] - self.t[t1])
 
-    @property
-    def average_daily_gain(self):
-        return (self._time_instant_sols[-1].wet_weight - self._time_instant_sols[0].wet_weight) / \
-               (self.t[-1] - self.t[0])
+    def average_daily_gain(self, t1=0, t2=-1):
+        return (self.time_instant_sols[t2].wet_weight - self.time_instant_sols[t1].wet_weight) / \
+               (self.t[t2] - self.t[t1])
 
-    @property
-    def feed_consumption_ratio(self):
-        return self.total_feed_intake / (self._time_instant_sols[-1].wet_weight - self._time_instant_sols[0].wet_weight)
+    def feed_consumption_ratio(self, t1=0, t2=-1):
+        return self.total_feed_intake(t1, t2) / \
+               (self.time_instant_sols[t2].wet_weight - self.time_instant_sols[t1].wet_weight)
 
-    @property
-    def relative_growth_rate(self):
-        return (np.log(self._time_instant_sols[-1].wet_weight) - np.log(self._time_instant_sols[0].wet_weight)) / \
-               (self.t[-1] - self.t[0])
+    def relative_growth_rate(self, t1=0, t2=-1):
+        return (np.log(self.time_instant_sols[t2].wet_weight) - np.log(self.time_instant_sols[t1].wet_weight)) / \
+               (self.t[t2] - self.t[t1])
+
+    def print_growth_report(self, t1=0, t2=-1):
+        w1 = self.time_instant_sols[t1].wet_weight
+        w2 = self.time_instant_sols[t2].wet_weight
+        print(f"Initial Weight: {w1 / 1000} kg\n"
+              f"Final Weight: {w2 / 1000} kg\n")
+        print(f"DFI: {self.daily_feed_intake(t1, t2):.5} g\n"
+              f"ADG: {self.average_daily_gain(t1, t2):.4} g\n"
+              f"FCR: {self.feed_consumption_ratio(t1, t2):.4}\n"
+              f"RGR: {self.relative_growth_rate(t1, t2) * 100:.4} %")

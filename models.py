@@ -16,7 +16,7 @@ class STD:
         (f) over time.
     """
 
-    MAX_STEP_SIZE = 48 / 24  # Maximum step size during integration of state equations
+    MAX_STEP_SIZE = 1  # Maximum step size during integration of state equations, in days
 
     def __init__(self, organism):
         """Takes as input a Pet class or a dictionary of parameters to create a Pet class."""
@@ -77,6 +77,7 @@ class STD:
             initial_state = (self.organism.E_0, self.organism.V_0, 0, 0)
         elif initial_state == 'birth':
             initial_state = self.get_state_at_maturity(self.organism.E_Hb)
+            initial_state[2] += 1  # To avoid floating point errors and ensure simulation starts at the next stage
         elif initial_state == 'puberty':
             initial_state = self.get_state_at_maturity(self.organism.E_Hp)
         elif len(initial_state) != 4:
@@ -105,16 +106,14 @@ class STD:
         self.sol = solution.TimeIntervalSol(self, self.ode_sol)
         return self.sol
 
-    # TODO: function to find state at input maturity level
     def get_state_at_maturity(self, E_H):
         event = lambda t, states: states[2] - E_H
         event.terminal = True
         embryo_state = (self.organism.E_0, self.organism.V_0, 0, 0)
         self.food_function = lambda t: 1
-        ode_sol = solve_ivp(self.state_changes, (0,1e6), embryo_state, max_step=self.MAX_STEP_SIZE, events=event)
+        ode_sol = solve_ivp(self.state_changes, (0, 1e6), embryo_state, max_step=self.MAX_STEP_SIZE, events=event)
         if ode_sol.status != 1:
-            raise Exception(f"Simulation couldn't reach maturity level {E_H}. Can't start simulation without an "
-                            f"initial state.")
+            raise Exception(f"Simulation couldn't reach maturity level {E_H}.")
 
         return ode_sol.y[:, -1]
 
@@ -402,8 +401,9 @@ class STX(STD):
     def simulate(self, t_span, food_function=1, step_size='auto', initial_state='embryo', transformation=None):
         if initial_state == 'weaning':
             initial_state = self.get_state_at_maturity(self.organism.E_Hx)
-        return super().simulate(t_span=t_span, food_function=food_function, step_size=step_size, initial_state=initial_state,
-                         transformation=transformation)
+        return super().simulate(t_span=t_span, food_function=food_function, step_size=step_size,
+                                initial_state=initial_state,
+                                transformation=transformation)
 
     def state_changes(self, t, state_vars):
         """

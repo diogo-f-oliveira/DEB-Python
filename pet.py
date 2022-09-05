@@ -120,7 +120,8 @@ class Pet:
         :param E_R: scalar or vector of reproduction buffer
         :return: scalar or vector of wet weight
         """
-        return V + (E + E_R) * self.comp.E.w / self.comp.E.mu
+        # TODO: make omega a property
+        return V * (1 + E / V * self.comp.E.w / self.comp.E.d / self.comp.E.mu)
 
     def compute_dry_weight(self, V, E, E_R):
         """
@@ -130,7 +131,7 @@ class Pet:
         :param E_R: scalar or vector of reproduction buffer
         :return: scalar or vector of wet weight
         """
-        return self.comp.V.d * V + (E + E_R) * self.comp.E.w / self.comp.E.mu
+        return 1 * V + (E + E_R) * self.comp.E.w / self.comp.E.mu
 
     def __getattr__(self, item):
         """Returns the value of temperature affected parameters corrected with the temperature correction factor TC.
@@ -238,6 +239,9 @@ class Pet:
     def TC(self):
         """Temperature correction factor TC (-)."""
         return exp(self.T_A / self.T_ref - self.T_A / self.T)
+
+    def von_bertanlanffy_growth_rate(self, f=1):
+        return self.k_M / (1 + f / self.g) / 3
 
     @property
     def y_XE(self):
@@ -383,7 +387,20 @@ animals = {
                   E_Hb=4.81e+6, E_Hp=8.726e+7, E_Hx=1.346e+7, t_0=26.8217, f_milk=1),
     'bos_taurus_alentejana': dict(E_G=8261.79, p_Am=2501.03, v=0.107224, p_M=42.2556, kappa=0.976264, k_J=0.0002,
                                   kap_R=0.95, E_Hb=2071229.972, E_Hp=30724119.81, E_Hx=15139260.45, t_0=109.4715964,
-                                  f_milk=1, del_M=0.349222, kap_X=0.3, rum_fraction=0.3),
+                                  f_milk=1, del_M=0.349222, kap_X=0.3, rum_fraction=0.3, T=311.75),
+    'bos_taurus_angus': dict(E_G=8844.512631, p_Am=4041.526574, v=0.05336291207, p_M=101.9894311, kappa=0.937766541,
+                             k_J=0.0002, kap_R=0.95, E_Hb=7863765.193, E_Hp=54638121.69, E_Hx=40960508.82,
+                             t_0=58.52206751, f_milk=1, del_M=0.2688914292, kap_X=0.3, rum_fraction=0.3, T=311.75),
+    'bos_taurus_limousin': dict(E_G=8839.515768, p_Am=4927.102094, v=0.167427252, p_M=88.18065702, kappa=0.9783141238,
+                                k_J=0.0002, kap_R=0.95, E_Hb=2234700.015, E_Hp=91160096.48, E_Hx=34941987.33,
+                                t_0=188.2442861, f_milk=1, del_M=0.3686000612, kap_X=0.3, rum_fraction=0.3, T=311.75),
+    'bos_taurus_charolais': dict(E_G=8885.233383, p_Am=4583.16235, v=0.06126486348, p_M=96.28243777, kappa=0.9771477494,
+                                 k_J=0.0002, kap_R=0.95, E_Hb=2031342.633, E_Hp=26960202.1, E_Hx=17219252.94,
+                                 t_0=88.84268928, f_milk=1, del_M=0.2688914292, kap_X=0.3, rum_fraction=0.3, T=311.75),
+
+    'sheep': dict(E_G=7838.53, p_Am=3473.31, v=0.18751, p_M=96.0278, kappa=0.82933, k_J=0.0002, kap_R=0.95,
+                  E_Hb=4.154e+06, E_Hp=2.397e+08, E_Hx=6.797e+07, t_0=80.9564, f_milk=1, del_M=0.2688914292, kap_X=0.8,
+                  rum_fraction=0.3, T=311.75)
 }
 
 if __name__ == '__main__':
