@@ -1,8 +1,8 @@
+from .pet import Pet, Ruminant
+from .solution import TimeIntervalSol, TimeInstantSol
+
 from scipy.integrate import solve_ivp
 import numpy as np
-from pet import Pet, Ruminant
-import solution
-
 
 class STD:
     """

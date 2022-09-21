@@ -6,7 +6,7 @@ class Compound:
     class Compound:
 
         Stores the properties of a compound, including the chemical indices, the specific density, the chemical
-        potential, the enthalpy of formation, the molecular weight and the chemical formula.
+        potential, the enthalpy of formation, the molecular weight_col and the chemical formula.
     """
     ATOMS = ['C', 'H', 'O', 'N']
     MOLECULAR_WEIGHTS = [12, 1, 16, 14]
@@ -14,7 +14,7 @@ class Compound:
     def __init__(self, n, d, mu, h, name, chemical_formula=None):
         """
         Instantiates a compound. The chemical indices, the specific density, the chemical potential, the enthalpy of
-        formation and name of the compound are required. Molecular weight is computed from the chemical indices. If a
+        formation and name of the compound are required. Molecular weight_col is computed from the chemical indices. If a
         chemical formula is not provided, it is built from the chemical indices.
         :param n: sequence of length 4 containing the the chemical indices in the order (C, H, O, N)
         :param d: specific density (g/cm^3)
@@ -32,7 +32,7 @@ class Compound:
         self.d = d  # Specific density of Compound (g/cm^3)
         self.mu = mu  # Chemical potential of Compound (J/mol) or (J/C-mol)
         self.h = h  # Enthalpy of formation (J/mol) or (J/C-mol)
-        self.w = np.dot(n, self.MOLECULAR_WEIGHTS)  # Molecular weight (g/mol) or (g/C-mol)
+        self.w = np.dot(n, self.MOLECULAR_WEIGHTS)  # Molecular weight_col (g/mol) or (g/C-mol)
 
         self.name = name
         if chemical_formula is not None:
@@ -91,22 +91,22 @@ class Compound:
         return cls(n=(0, 3, 0, 1), d=0.1, mu=0, h=-46_100, name='Ammonia', chemical_formula='NH3')
 
     @classmethod
-    def food(cls, n=(1, 1.8, 0.5, 0.15), d=0.34, mu=525_000, h=-117_300):
+    def food(cls, n=(1, 1.8, 0.5, 0.15), d=0.3, mu=525_000, h=-117_300):
         """Constructor for food (X). Properties have default values, but can be overridden."""
         return cls(n=n, d=d, mu=mu, h=h, name='Food')
 
     @classmethod
-    def structure(cls, n=(1, 1.8, 0.5, 0.15), d=0.34, mu=500_000, h=-117_300):
+    def structure(cls, n=(1, 1.8, 0.5, 0.15), d=0.3, mu=500_000, h=-117_300):
         """Constructor for structure (V). Properties have default values, but can be overridden."""
         return cls(n=n, d=d, mu=mu, h=h, name='Structure')
 
     @classmethod
-    def reserve(cls, n=(1, 1.8, 0.5, 0.15), d=0.34, mu=550_000, h=-117_300):
+    def reserve(cls, n=(1, 1.8, 0.5, 0.15), d=0.3, mu=550_000, h=-117_300):
         """Constructor for reserve (E). Properties have default values, but can be overridden."""
         return cls(n=n, d=d, mu=mu, h=h, name='Reserve')
 
     @classmethod
-    def feces(cls, n=(1, 1.8, 0.5, 0.15), d=0.34, mu=480_000, h=-117_300):
+    def feces(cls, n=(1, 1.8, 0.5, 0.15), d=0.3, mu=480_000, h=-117_300):
         """Constructor for food (P). Properties have default values, but can be overridden."""
         return cls(n=n, d=d, mu=mu, h=h, name='Feces')
 
@@ -211,7 +211,3 @@ class RuminantComposition(Composition):
     def mineral_symbols(self):
         return self.C.chemical_formula, self.H.chemical_formula, self.O.chemical_formula, self.N.chemical_formula, \
                self.M.chemical_formula
-
-
-if __name__ == '__main__':
-    comp = Composition(structure=0.3)

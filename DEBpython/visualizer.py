@@ -1,5 +1,6 @@
+from .solution import TimeIntervalSol
+
 import matplotlib.pyplot as plt
-from solution import TimeIntervalSol
 
 
 class Plotter:
