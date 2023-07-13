@@ -50,6 +50,10 @@ class TimeInstantSol:
 
         self.feed_intake = (self.organic_fluxes[0] * self.organism.comp.X.w)[0]
 
+        self.carbon_dioxide = (self.mineral_fluxes[0] * self.organism.comp.C.w)[0]
+        if self.model_type == 'RUM':
+            self.methane = (self.mineral_fluxes[4] * self.organism.comp.M.w)[0]
+
 
 class TimeIntervalSol(MutableSequence):
     """
@@ -73,6 +77,7 @@ class TimeIntervalSol(MutableSequence):
 
         self.time_instant_sols = [TimeInstantSol(self.model, self.t[i], ode_sol.y[:, i]) for i in range(len(self.t))]
 
+        # TODO: create attributes for each of the stage transitions
         self.time_of_birth = None
         self.time_of_weaning = None
         self.time_of_puberty = None
@@ -80,6 +85,7 @@ class TimeIntervalSol(MutableSequence):
 
     def calculate_stage_transitions(self):
         """Calculates the time step of life stage transitions."""
+        # TODO: set to be one before
         for t, E_H in zip(self.t, self.E_H):
             if not self.time_of_birth and E_H > self.model.organism.E_Hb:
                 self.time_of_birth = t
@@ -111,6 +117,7 @@ class TimeIntervalSol(MutableSequence):
 
     def __getitem__(self, time_step):
         # TODO: Check for time steps outside of simulation time
+        # TODO: Case for slice of time steps
         if isinstance(time_step, int):
             return self.time_instant_sols[time_step]
         elif isinstance(time_step, (float, np.float64)):
@@ -136,6 +143,14 @@ class TimeIntervalSol(MutableSequence):
                 break
         return t_i
 
+    @staticmethod
+    def find_closest_value(variable, value):
+        for i, v in enumerate(variable):
+            if v > value:
+                time_step = i
+                break
+        return time_step
+
     def __setitem__(self, key, value):
         return
 
@@ -160,6 +175,13 @@ class TimeIntervalSol(MutableSequence):
         else:
             raise AttributeError
 
+    def integrate(self, variable, t1=0, t2=-1):
+        if t2 > -1:
+            t2 += 1
+        elif t2 == -1:
+            t2 = self.__len__()
+        return -simpson(variable[t1:t2], self.t[t1:t2])
+
     def total_feed_intake(self, t1=0, t2=-1):
         if t2 > -1:
             t2 += 1
@@ -174,13 +196,21 @@ class TimeIntervalSol(MutableSequence):
         return (self.time_instant_sols[t2].wet_weight - self.time_instant_sols[t1].wet_weight) / \
                (self.t[t2] - self.t[t1])
 
-    def feed_consumption_ratio(self, t1=0, t2=-1):
+    def feed_conversion_ratio(self, t1=0, t2=-1):
         return self.total_feed_intake(t1, t2) / \
                (self.time_instant_sols[t2].wet_weight - self.time_instant_sols[t1].wet_weight)
 
     def relative_growth_rate(self, t1=0, t2=-1):
         return (np.log(self.time_instant_sols[t2].wet_weight) - np.log(self.time_instant_sols[t1].wet_weight)) / \
                (self.t[t2] - self.t[t1])
+
+    def compute_emissions(self, t1=0, t2=-1):
+        # TODO: Add methane emissions if it is a RUM model
+        if t2 > -1:
+            t2 += 1
+        elif t2 == -1:
+            t2 = self.__len__()
+        return -simpson(self.carbon_dioxide[t1:t2], self.t[t1:t2])
 
     def print_growth_report(self, t1=0, t2=-1):
         w1 = self.time_instant_sols[t1].wet_weight
@@ -189,5 +219,5 @@ class TimeIntervalSol(MutableSequence):
               f"Final Weight: {w2 / 1000} kg\n")
         print(f"DFI: {self.daily_feed_intake(t1, t2):.5} g\n"
               f"ADG: {self.average_daily_gain(t1, t2):.4} g\n"
-              f"FCR: {self.feed_consumption_ratio(t1, t2):.4}\n"
+              f"FCR: {self.feed_conversion_ratio(t1, t2):.4}\n"
               f"RGR: {self.relative_growth_rate(t1, t2) * 100:.4} %")

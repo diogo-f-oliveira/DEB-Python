@@ -4,6 +4,7 @@ from .solution import TimeIntervalSol, TimeInstantSol
 from scipy.integrate import solve_ivp
 import numpy as np
 
+
 class STD:
     """
     class STD:
@@ -75,21 +76,20 @@ class STD:
         # Get initial state
         if initial_state == 'embryo':
             initial_state = (self.organism.E_0, self.organism.V_0, 0, 0)
+            # To avoid floating point errors and ensure simulation starts at the next stage
         elif initial_state == 'birth':
             initial_state = self.get_state_at_maturity(self.organism.E_Hb)
             initial_state[2] += 1  # To avoid floating point errors and ensure simulation starts at the next stage
         elif initial_state == 'puberty':
             initial_state = self.get_state_at_maturity(self.organism.E_Hp)
+            initial_state[2] += 1  # To avoid floating point errors and ensure simulation starts at the next stage
         elif len(initial_state) != 4:
             raise Exception(f"Invalid input {initial_state} for initial state. The initial state must be a list or "
                             f"tuple of length 4 with format (E, V, E_H, E_R) or a specified keyword.")
 
         # Store the food function
         if isinstance(food_function, (float, int)):
-            if food_function < 0 or food_function > 1:
-                raise Exception("The scaled functional response f must be between 0 and 1.")
-            else:
-                self.food_function = lambda t: food_function
+            self.food_function = lambda t: food_function
         elif callable(food_function):
             self.food_function = food_function
         else:
@@ -103,7 +103,7 @@ class STD:
 
         # Integrate the state equations
         self.ode_sol = solve_ivp(self.state_changes, t_span, initial_state, t_eval=t_eval, max_step=self.MAX_STEP_SIZE)
-        self.sol = solution.TimeIntervalSol(self, self.ode_sol)
+        self.sol = TimeIntervalSol(self, self.ode_sol)
         return self.sol
 
     def get_state_at_maturity(self, E_H):
@@ -132,11 +132,11 @@ class STD:
         self.food_function = lambda t: f
 
         # State variables at full growth
-        state_vars = (self.organism.E_m * (self.organism.ultimate_length(f)) ** 3,
-                      (self.organism.ultimate_length(f)) ** 3,
+        state_vars = (self.organism.E_m * (self.organism.L_inf(f)) ** 3,
+                      (self.organism.L_inf(f)) ** 3,
                       self.organism.E_Hp,
                       E_R)
-        return solution.TimeInstantSol(self, 0, state_vars)
+        return TimeInstantSol(self, 0, state_vars)
 
     def state_changes(self, t, state_vars):
         """
@@ -231,11 +231,11 @@ class STD:
         :return: Scalar or array of mobilization power p_C values
         """
         return E * (self.organism.E_G * self.organism.v * (V ** (-1 / 3)) + self.organism.p_M) / \
-               (self.organism.kappa * E / V + self.organism.E_G)
+               (self.organism.kap * E / V + self.organism.E_G)
 
     def p_S(self, V):
         """
-        Computes the somatic maintenance power p_S.
+        Computes the somatic maintenance power p_S.º
 
         :param V: Scalar or array of Structure values
         :return: Scalar or array of somatic maintenance power p_S values
@@ -250,7 +250,7 @@ class STD:
         :param p_S: Scalar or array of somatic maintenance power values
         :return: Scalar or array of growth power p_G values
         """
-        return self.organism.kappa * p_C - p_S
+        return self.organism.kap * p_C - p_S
 
     def p_J(self, E_H):
         """
@@ -281,7 +281,7 @@ class STD:
         :param p_J: Scalar or array of maturity maintenance power values
         :return: Scalar or array of reproduction power p_R values
         """
-        return (1 - self.organism.kappa) * p_C - p_J
+        return (1 - self.organism.kap) * p_C - p_J
 
     def p_D(self, p_S, p_J, p_R, E_H):
         """
@@ -332,7 +332,7 @@ class STD:
         :param p_G: Scalar or array of growth power values
         :param E_H: Maturity level
         :return: array of mineral fluxes values. Each row corresponds to the flux of CO2, H2O, O2 and N-Waste
-            respectively.
+            respectively in mol/d.
         """
         if type(p_A) != np.ndarray:
             p_A = np.array([p_A])
@@ -401,6 +401,9 @@ class STX(STD):
     def simulate(self, t_span, food_function=1, step_size='auto', initial_state='embryo', transformation=None):
         if initial_state == 'weaning':
             initial_state = self.get_state_at_maturity(self.organism.E_Hx)
+            # TODO: Think of another way to do this, as the value is fine for ruminants, but for other smaller organisms
+            #  it is rather large
+            initial_state[2] += 1  # To avoid floating point errors and ensure simulation starts at the next stage
         return super().simulate(t_span=t_span, food_function=food_function, step_size=step_size,
                                 initial_state=initial_state,
                                 transformation=transformation)
@@ -518,13 +521,13 @@ class STX(STD):
                 if maturity < self.organism.E_Hb:  # Pet is a foetus
                     p_G[i] = self.organism.E_G * self.organism.v * (structure ** (2 / 3))
                 else:
-                    p_G[i] = self.organism.kappa * mobil - soma_maint
+                    p_G[i] = self.organism.kap * mobil - soma_maint
             return p_G
         else:
             if E_H < self.organism.E_Hb:  # Pet is a foetus
                 return self.organism.E_G * self.organism.v * (V ** (2 / 3))
             else:
-                return self.organism.kappa * p_C - p_S
+                return self.organism.kap * p_C - p_S
 
     def p_R(self, p_C, p_J, p_S, p_G, E_H):
         """
@@ -541,15 +544,15 @@ class STX(STD):
             p_R = np.zeros_like(E_H)
             for i, (maturity, mobil, mat_maint, soma_maint, growth) in enumerate(zip(E_H, p_C, p_J, p_S, p_G)):
                 if maturity < self.organism.E_Hb:  # Pet is a foetus
-                    p_R[i] = (1 - self.organism.kappa) * (soma_maint + growth) / self.organism.kappa - mat_maint
+                    p_R[i] = (1 - self.organism.kap) * (soma_maint + growth) / self.organism.kap - mat_maint
                 else:
-                    p_R[i] = (1 - self.organism.kappa) * mobil - mat_maint
+                    p_R[i] = (1 - self.organism.kap) * mobil - mat_maint
             return p_R
         else:
             if E_H < self.organism.E_Hb:  # Pet is a foetus
-                return (1 - self.organism.kappa) * (p_S + p_G) / self.organism.kappa - p_J
+                return (1 - self.organism.kap) * (p_S + p_G) / self.organism.kap - p_J
             else:
-                return (1 - self.organism.kappa) * p_C - p_J
+                return (1 - self.organism.kap) * p_C - p_J
 
 
 class RUM(STX):
@@ -574,7 +577,7 @@ class RUM(STX):
         """
         Computes the mineral fluxes using the basic organic powers. Until weaning, the organism does not ruminate and
         therefore the standard assimilation equation applies. Afterwards, both sub transformations occur. The mineral
-        fluxes are in following format (CO2, H2O, O2, N-Waste, CH4).
+        fluxes are in following format (CO2, H2O, O2, N-Waste, CH4). Units are mol/d.
         :param p_A: scalar of assimilation power
         :param p_D: scalar of dissipation power
         :param p_G: scalar of growth power

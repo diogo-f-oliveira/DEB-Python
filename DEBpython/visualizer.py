@@ -2,6 +2,24 @@ from .solution import TimeIntervalSol
 
 import matplotlib.pyplot as plt
 
+tex_labels = {
+    'p_Am': r'\{\dot{p}_{Am}\}',
+    'p_M': r'\dot{p}_M',
+    'v': r'\dot{v}',
+    'kap': r'\kappa',
+    'kap_X': r'\kappa_X',
+    'E_G': '[E_G]',
+    'E_Hb': 'E_H^b',
+    'E_Hx': 'E_H^x',
+    'E_Hp': 'E_H^p',
+    'k_J': r'\dot{k}_J',
+    'kap_R': r'\kappa_R',
+    'kap_P': r'\kappa_P',
+    'kap_G': r'\kappa_G',
+    'r_B': r'\dot{r}_B',
+    'omega': r'\omega',
+}
+# TODO: units dict for pars
 
 class Plotter:
     """
@@ -31,12 +49,14 @@ class Plotter:
         """Plots the evolution of the powers."""
         fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(16, 9), tight_layout=True, num="Powers")
 
-        self.plot_vs_time(axes[0, 0], self.sol.p_A, 'Assimilation Power', 'J/d',title_fontsize=15, label_fontsize=15)
-        self.plot_vs_time(axes[0, 1], self.sol.p_C, 'Mobilization Power', 'J/d',title_fontsize=15, label_fontsize=15)
-        self.plot_vs_time(axes[0, 2], self.sol.p_S, 'Somatic Maintenance Power', 'J/d',title_fontsize=15, label_fontsize=15)
-        self.plot_vs_time(axes[1, 0], self.sol.p_G, 'Growth Power', 'J/d',title_fontsize=15, label_fontsize=15)
-        self.plot_vs_time(axes[1, 1], self.sol.p_J, 'Maturity Maintenance Power', 'J/d',title_fontsize=15, label_fontsize=15)
-        self.plot_vs_time(axes[1, 2], self.sol.p_R, 'Reproduction Power', 'J/d',title_fontsize=15, label_fontsize=15)
+        self.plot_vs_time(axes[0, 0], self.sol.p_A, 'Assimilation Power', 'J/d', title_fontsize=15, label_fontsize=15)
+        self.plot_vs_time(axes[0, 1], self.sol.p_C, 'Mobilization Power', 'J/d', title_fontsize=15, label_fontsize=15)
+        self.plot_vs_time(axes[0, 2], self.sol.p_S, 'Somatic Maintenance Power', 'J/d', title_fontsize=15,
+                          label_fontsize=15)
+        self.plot_vs_time(axes[1, 0], self.sol.p_G, 'Growth Power', 'J/d', title_fontsize=15, label_fontsize=15)
+        self.plot_vs_time(axes[1, 1], self.sol.p_J, 'Maturity Maintenance Power', 'J/d', title_fontsize=15,
+                          label_fontsize=15)
+        self.plot_vs_time(axes[1, 2], self.sol.p_R, 'Reproduction Power', 'J/d', title_fontsize=15, label_fontsize=15)
 
         fig.show()
 
@@ -80,6 +100,12 @@ class Plotter:
         self.plot_vs_time(axes[1, 1], self.sol.dry_weight, 'Dry Weight', 'g')
 
         fig.show()
+
+    def plot_emissions(self):
+        """Plots the GHG emissions in CO2 equivalent."""
+        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(16, 9), tight_layout=True, num="GHG Emissions")
+
+        self.plot_vs_time(axes, self.sol.mineral_fluxes[0] / self.sol.wet_weight, 'CO2 Emissions', 'g$_{CO_2}')
 
     def plot_vs_time(self, ax, variable, variable_name='', unit='J', label_fontsize=16, title_fontsize=20):
         """
