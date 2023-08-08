@@ -320,8 +320,8 @@ class Ruminant(Pet):
         Assumes assimilation occurs in two sub transformations, one that produces CO2 and another that produces CH4. The
         assimilation reaction is a weighted average of both sub transformations.
         """
-    # TODO: Change rum_fraction to xi_C
-    def __init__(self, p_Am, kap, v, p_M, E_G, k_J, E_Hb, E_Hp, kap_R, rum_fraction, comp=None, p_T=0, kap_X=0.8,
+
+    def __init__(self, p_Am, kap, v, p_M, E_G, k_J, E_Hb, E_Hp, kap_R, xi_C, comp=None, p_T=0, kap_X=0.8,
                  kap_P=0.1, E_0=1e6, V_0=1e-12, T_A=8000, T_ref=293.15, T=298.15, del_M=1, **additional_parameters):
 
         super().__init__(p_Am, kap, v, p_M, E_G, k_J, E_Hb, E_Hp, kap_R, comp=comp, p_T=p_T, kap_X=kap_X, kap_P=kap_P,
@@ -338,15 +338,15 @@ class Ruminant(Pet):
         else:
             raise Exception("Invalid Composition input. Must be of class RuminantComposition.")
 
-        self.rum_fraction = rum_fraction  # Rumination fraction (-)
+        self.xi_C = xi_C  # Rumination fraction (-)
 
     @property
     def gamma_M(self):
         """Computes the matrix of stoichiometry coefficients for mineral compounds in the assimilation, dissipation and
         growth aggregated chemical reactions."""
         gamma_M = np.pad(self.gamma_M_CO2, ((0, 1), (0, 0)))
-        gamma_M[:, 0] = gamma_M[:, 0] * (1 - self.rum_fraction) + \
-                        np.pad(self.gamma_M_CH4[:, 0], (1, 0)) * self.rum_fraction
+        gamma_M[:, 0] = gamma_M[:, 0] * (1 - self.xi_C) + \
+                        np.pad(self.gamma_M_CH4[:, 0], (1, 0)) * self.xi_C
         return gamma_M
 
     @property
@@ -381,7 +381,7 @@ class Ruminant(Pet):
         gamma_M = np.zeros((5, 5))
         gamma_M[1:5, 1] = self.gamma_M_CH4
         gamma_M[0:4, 2:] = self.gamma_M_CO2
-        gamma_M[:, 0] = gamma_M[:, 2] * (1 - self.rum_fraction) + gamma_M[:, 1] * self.rum_fraction
+        gamma_M[:, 0] = gamma_M[:, 2] * (1 - self.xi_C) + gamma_M[:, 1] * self.xi_C
         return gamma_M
 
 

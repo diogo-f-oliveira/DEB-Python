@@ -18,6 +18,7 @@ tex_labels = {
     'kap_G': r'\kappa_G',
     'r_B': r'\dot{r}_B',
     'omega': r'\omega',
+    'xi_C': r'\xi_C'
 }
 # TODO: units dict for pars
 

@@ -63,17 +63,17 @@ class Compound:
     @classmethod
     def carbon_dioxide(cls):
         """Constructor for carbon dioxide (CO2)."""
-        return cls(n=(1, 0, 2, 0), d=0.1, mu=0, h=-393_520, name='Carbon Dioxide', chemical_formula='CO2')
+        return cls(n=(1, 0, 2, 0), d=0.1, mu=0, h=0, name='Carbon Dioxide', chemical_formula='CO2')
 
     @classmethod
     def methane(cls):
         """Constructor for methane (CH4)."""
-        return cls(n=(1, 4, 0, 0), d=0.1, mu=0, h=-74_900, name='Methane', chemical_formula='CH4')
+        return cls(n=(1, 4, 0, 0), d=0.1, mu=817_990, h=890_330, name='Methane', chemical_formula='CH4')
 
     @classmethod
     def water(cls):
         """Constructor for water (H2O)."""
-        return cls(n=(0, 2, 1, 0), d=0.1, mu=0, h=-285_830, name='Water', chemical_formula='H2O')
+        return cls(n=(0, 2, 1, 0), d=0.1, mu=0, h=0, name='Water', chemical_formula='H2O')
 
     @classmethod
     def oxygen(cls):
@@ -83,12 +83,12 @@ class Compound:
     @classmethod
     def urea(cls):
         """Constructor for urea (CO(NH2)2)."""
-        return cls(n=(1, 4, 1, 2), d=0.1, mu=0, h=0, name='Urea', chemical_formula='CO(NH2)2')
+        return cls(n=(1, 4, 1, 2), d=0.1, mu=671_809, h=632_070, name='Urea', chemical_formula='CO(NH2)2')
 
     @classmethod
     def ammonia(cls):
         """Constructor for ammonia (NH3)."""
-        return cls(n=(0, 3, 0, 1), d=0.1, mu=0, h=-46_100, name='Ammonia', chemical_formula='NH3')
+        return cls(n=(0, 3, 0, 1), d=0.1, mu=339196, h=382_555, name='Ammonia', chemical_formula='NH3')
 
     @classmethod
     def food(cls, n=(1, 1.8, 0.5, 0.15), d=0.3, mu=525_000, h=-117_300):
@@ -182,6 +182,16 @@ class Composition:
         return np.array([self.C.h, self.H.h, self.O.h, self.N.h])
 
     @property
+    def mu_O(self):
+        """Vector of chemical potentials of organic compounds."""
+        return np.array([self.X.mu, self.V.mu, self.E.mu, self.P.mu])
+
+    @property
+    def mu_M(self):
+        """Vector of chemical potentials of mineral compounds."""
+        return np.array([self.C.mu, self.H.mu, self.O.mu, self.N.mu])
+
+    @property
     def organic_symbols(self):
         return 'X', 'V', 'E', 'P'
 
@@ -201,11 +211,18 @@ class RuminantComposition(Composition):
 
     @property
     def n_M(self):
+        """Matrix of chemical indices of mineral compounds."""
         return np.array([self.C.n, self.H.n, self.O.n, self.N.n, self.M.n]).T
 
     @property
     def h_M(self):
+        """Vector of enthalpies of formation of mineral compounds."""
         return np.array([self.C.h, self.H.h, self.O.h, self.N.h, self.M.h])
+
+    @property
+    def mu_M(self):
+        """Vector of chemical potentials of mineral compounds."""
+        return np.array([self.C.mu, self.H.mu, self.O.mu, self.N.mu, self.M.mu])
 
     @property
     def mineral_symbols(self):

@@ -3,9 +3,9 @@ import matplotlib.pyplot as plt
 import DEBpython.pet as pet
 import DEBpython.models as models
 import DEBpython.visualizer as viz
+import DEBpython.formulae as formulae
 
 matplotlib.use('TkAgg')
-
 
 import warnings
 
@@ -101,8 +101,18 @@ if __name__ == '__main__':
 
     # viz.plot_entropy_generation()
     fig, ax = plt.subplots()
-    ax.plot(sol.t, sol.E/sol.V/mammal.E_m)
+    ax.plot(sol.t, sol.E / sol.V / mammal.E_m)
     ax.grid()
     ax.set_xlabel("Time [d]")
     ax.set_ylabel("Scaled reserve density $e$ [-]")
-    plt.show()
+    # plt.show()
+
+    cow = pet.Ruminant(xi_C=0.04, **mertolenga_pars)
+    import numpy as np
+
+    t = np.linspace(0, 100)
+    W_i = 300
+    print(formulae.heat_generation(cow, t, W_i, t0=2, f=0.8))
+    print(formulae.oxygen_consumption_curve(cow, t, W_i, t0=2, f=0.8))
+    print(formulae.water_production_curve(cow, t, W_i, t0=2, f=0.8))
+    print(formulae.n_waste_production_curve(cow, t, W_i, t0=2, f=0.8))
