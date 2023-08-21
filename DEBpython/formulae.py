@@ -40,6 +40,12 @@ def dissipation_power(pet: Pet, t, L_i, t0=0.0, f=1.0):
     return 3 * r_B / pet.k_M * ((1 - pet.kap) * p_A + (1 + f / pet.kap / pet.g) * p_S)
 
 
+def mobilization_power(pet: Pet, t, L_i, t0=0.0, f=1.0):
+    p_A = assimilation_power(pet, t, L_i, t0=t0, f=f)
+    p_S = somatic_maintenance_power(pet, t, L_i, t0=t0, f=f)
+    return (pet.E_G * p_A + f * pet.E_m * p_S) / (pet.kap * f * pet.E_m + pet.E_G)
+
+
 def feed_intake_curve(pet: Pet, t, W_i, t0=0.0, f=1.0):
     W_conv_factor = 1 + f * pet.omega
     L_i = np.power(W_i / W_conv_factor, 1 / 3)
@@ -102,7 +108,7 @@ def n_waste_production_curve(pet: Pet, t, W_i, t0=0.0, f=1.0, assimilation=True,
     p_G = growth_power(pet, t, L_i, t0=t0, f=f)
     p_D = dissipation_power(pet, t, L_i, t0=t0, f=f)
     p = np.array([p_A, p_G, p_D])
-    return pet.comp.N.w * pet.eta_M[1, :] @ select_fluxes @ p
+    return pet.comp.N.w * pet.eta_M[3, :] @ select_fluxes @ p
 
 
 def heat_generation(pet: Pet, t, W_i, t0=0.0, f=1.0, assimilation=True, growth=True, dissipation=True):

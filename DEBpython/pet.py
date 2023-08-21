@@ -311,6 +311,14 @@ class Pet:
     def omega(self):
         return self.E_m * self.comp.E.w / self.comp.E.d / self.comp.E.mu
 
+    @property
+    def kap_N(self):
+        return self.comp.N.mu / self.comp.X.mu * self.gamma_M[3, 0] / self.y_XE
+
+    @property
+    def kap_Q(self):
+        return 1 - self.kap_X - self.kap_P - self.kap_N
+
 
 class Ruminant(Pet):
     """
@@ -384,6 +392,13 @@ class Ruminant(Pet):
         gamma_M[:, 0] = gamma_M[:, 2] * (1 - self.xi_C) + gamma_M[:, 1] * self.xi_C
         return gamma_M
 
+    @property
+    def kap_M(self):
+        return self.comp.M.mu / self.comp.X.mu * self.gamma_M[4, 0] / self.y_XE
+
+    @property
+    def kap_Q(self):
+        return 1 - self.kap_X - self.kap_P - self.kap_N - self.kap_M
 
 # Dictionary with parameters for several commom organisms. Usage with Pet class is: Pet(**animals[pet_name])
 animals = {
