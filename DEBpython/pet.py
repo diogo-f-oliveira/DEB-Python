@@ -29,7 +29,7 @@ class Pet:
         self._p_Am = p_Am  # Surface-specific maximum assimilation rate (J/d.cm^2)
         self._v = v  # Energy conductance (cm/d)
         self._p_M = p_M  # Volume-specific somatic maintenance rate (J/d.cm^3)
-        self._p_T = p_T  # Surface-specific somatic maintenance rate (J/d.cm^3)
+        self._p_T = p_T  # Surface-specific somatic maintenance rate (J/d.cm^2)
         self.kap = kap  # Allocation fraction to soma (-)
         self._k_J = k_J  # Maturity maintenance rate constant (d^-1)
         self.E_Hb = E_Hb  # Maturity at birth (J)
@@ -245,7 +245,7 @@ class Pet:
         return exp(self.T_A / self.T_ref - self.T_A / self.T)
 
     def r_B(self, f=1):
-        """Von Bertanlanffy growth rate r_B (d^-1)."""
+        """Von Bertalanffy growth rate r_B (d^-1)."""
         return self.k_M / (1 + f / self.g) / 3
 
     @property
@@ -309,6 +309,7 @@ class Pet:
 
     @property
     def omega(self):
+        """Contribution of ash free dry mass of reserve to total ash free dry biomass (-)"""
         return self.E_m * self.comp.E.w / self.comp.E.d / self.comp.E.mu
 
     @property

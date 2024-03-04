@@ -53,6 +53,29 @@ def feed_intake_curve(pet: Pet, t, W_i, t0=0.0, f=1.0):
     return pet.comp.X.w / pet.comp.X.mu / pet.kap_X * p_A
 
 
+def cumulative_feed_intake_curve(pet: Pet, t, W_i, t0=0.0, f=1.0):
+    W_conv_factor = 1 + f * pet.omega
+    L_i = np.power(W_i / W_conv_factor, 1 / 3)
+    L_inf = pet.L_inf(f=f)
+    L = length_curve(pet, t, L_i, t0=t0, f=f)
+    coef = f * pet.comp.X.w / pet.comp.X.mu / pet.kap_X * pet.p_Am
+    return coef * ((L_inf ** 2) * (t - t0) - 0.5 / pet.r_B(f=f) * ((L_inf + L) ** 2 - (L_inf + L_i) ** 2))
+
+
+def dynamic_feed_conversion_ratio(pet: Pet, t, W_i, t0=0.0, f=1.0):
+    W_conv_factor = 1 + f * pet.omega
+    L_i = np.power(W_i / W_conv_factor, 1 / 3)
+
+    L = length_curve(pet, t, L_i, t0=t0, f=f)
+    L_inf = pet.L_inf(f=f)
+    r_B = pet.r_B(f=f)
+
+    feed_coef = f * pet.comp.X.w / pet.comp.X.mu / pet.kap_X * pet.p_Am
+    weight_coef = 1 / 3 / r_B / W_conv_factor
+
+    return feed_coef * weight_coef / (L_inf - L)
+
+
 def faeces_production_curve(pet: Pet, t, W_i, t0=0.0, f=1.0):
     W_conv_factor = 1 + f * pet.omega
     L_i = np.power(W_i / W_conv_factor, 1 / 3)

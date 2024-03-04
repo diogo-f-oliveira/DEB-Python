@@ -2,7 +2,7 @@ from .solution import TimeIntervalSol
 
 import matplotlib.pyplot as plt
 
-tex_labels = {
+tex_par_symbols = {
     'p_Am': r'\{\dot{p}_{Am}\}',
     'p_M': r'\dot{p}_M',
     'v': r'\dot{v}',
@@ -18,10 +18,57 @@ tex_labels = {
     'kap_G': r'\kappa_G',
     'r_B': r'\dot{r}_B',
     'omega': r'\omega',
-    'xi_C': r'\xi_C'
+    'xi_C': r'\xi_C',
+    'h_a': r'\ddot{h}_a',
+    't_0': r't_0',
+    'del_M': r'\delta_M'
 }
-# TODO: units dict for pars
+tex_par_units = {
+    'p_Am': r'J/d \cdot cm^2',
+    'p_M': r'J/d \cdot cm^3',
+    'v': r'cm/d',
+    'kap': r'-',
+    'kap_X': r'-',
+    'E_G': 'J/cm^3',
+    'E_Hb': 'J',
+    'E_Hx': 'J',
+    'E_Hp': 'J',
+    'k_J': r'd^-1',
+    'kap_R': r'-',
+    'kap_P': r'-',
+    'kap_G': r'-',
+    'r_B': r'd^-1',
+    'omega': r'-',
+    'xi_C': r'-',
+    'h_a': r'd^{-2}',
+    't_0': r'd',
+    'del_M': r'-'
+}
 
+par_descriptions_en = {
+    'p_Am': 'Surface-specific maximum assimilation rate',
+    'p_M': 'Volume-specific somatic maintenance rate',
+    'v': 'Energy conductance',
+    'kap': 'Allocation fraction to soma',
+    'kap_X': 'Digestion efficiency',
+    'E_G': 'Specific cost for Structure',
+    'E_Hb': 'Maturity at birth',
+    'E_Hx': 'Maturity at weaning',
+    'E_Hp': 'Maturity at puberty',
+    'k_J': 'Maturity maintenance rate constant',
+    'kap_R': 'Reproduction efficiency',
+    'kap_P': 'Defecation efficiency',
+    'kap_G': 'Growth efficiency',
+    'r_B': r'von Bertalanffy growth rate',
+    'omega': 'Contribution of ash free dry mass of reserve to total ash free dry biomass',
+    'xi_C': 'Contribution of methane subtransformation to assimilation',
+    'h_a': 'Weibull aging acceleration',
+    't_0': 'Diapause',
+    'del_M': 'Shape coefficient'
+}
+
+
+# TODO: description dict for pars in Portuguese
 class Plotter:
     """
     class Plotter:
