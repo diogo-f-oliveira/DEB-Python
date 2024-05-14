@@ -51,7 +51,7 @@ par_descriptions_en = {
     'v': 'Energy conductance',
     'kap': 'Allocation fraction to soma',
     'kap_X': 'Digestion efficiency',
-    'E_G': 'Specific cost for Structure',
+    'E_G': 'Specific cost of structure',
     'E_Hb': 'Maturity at birth',
     'E_Hx': 'Maturity at weaning',
     'E_Hp': 'Maturity at puberty',

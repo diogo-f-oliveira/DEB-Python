@@ -26,6 +26,10 @@ def somatic_maintenance_power(pet: Pet, t, L_i, t0=0.0, f=1.0):
     return pet.p_M * np.power(L, 3) + pet.p_T * np.power(L, 2)
 
 
+def maturity_maintenance_power(pet: Pet, maturity):
+    return pet.k_J * maturity
+
+
 def growth_power(pet: Pet, t, L_i, t0=0.0, f=1.0):
     p_A = assimilation_power(pet, t, L_i, t0=t0, f=f)
     p_S = somatic_maintenance_power(pet, t, L_i, t0=t0, f=f)
@@ -33,17 +37,28 @@ def growth_power(pet: Pet, t, L_i, t0=0.0, f=1.0):
     return 3 * r_B / pet.k_M * (pet.kap * p_A - p_S)
 
 
-def dissipation_power(pet: Pet, t, L_i, t0=0.0, f=1.0):
-    p_A = assimilation_power(pet, t, L_i, t0=t0, f=f)
-    p_S = somatic_maintenance_power(pet, t, L_i, t0=t0, f=f)
-    r_B = pet.r_B(f=f)
-    return 3 * r_B / pet.k_M * ((1 - pet.kap) * p_A + (1 + f / pet.kap / pet.g) * p_S)
-
-
 def mobilization_power(pet: Pet, t, L_i, t0=0.0, f=1.0):
     p_A = assimilation_power(pet, t, L_i, t0=t0, f=f)
     p_S = somatic_maintenance_power(pet, t, L_i, t0=t0, f=f)
     return (pet.E_G * p_A + f * pet.E_m * p_S) / (pet.kap * f * pet.E_m + pet.E_G)
+
+
+def dissipation_power(pet: Pet, t, L_i, t0=0.0, f=1.0, adult=False):
+    p_S = somatic_maintenance_power(pet, t, L_i, t0=t0, f=f)
+    if not adult:
+        p_A = assimilation_power(pet, t, L_i, t0=t0, f=f)
+        r_B = pet.r_B(f=f)
+        return 3 * r_B / pet.k_M * ((1 - pet.kap) * p_A + (1 + f / pet.kap / pet.g) * p_S)
+    else:
+        p_J = maturity_maintenance_power(pet, pet.E_Hp)
+        p_R = reproduction_power(pet, t, L_i, p_J, t0=t0, f=f)
+        return p_S + p_J + pet.kap_R * p_R
+
+
+def reproduction_power(pet: Pet, t, L_i, p_J, t0=0.0, f=1.0):
+    p_C = mobilization_power(pet, t, L_i, t0=t0, f=f)
+
+    return (1 - pet.kap) * p_C - p_J
 
 
 def feed_intake_curve(pet: Pet, t, W_i, t0=0.0, f=1.0):

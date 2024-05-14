@@ -166,6 +166,7 @@ class Pet:
         return description
 
     def aggregated_chemical_reactions(self):
+        # TODO: Return equations formatted in LaTeX
         """
         Returns a dictionary with the aggregated chemical reactions complete with stoichiometry coefficients.
         :return: dictionary with the three aggregated chemical reactions as strings
