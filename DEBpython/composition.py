@@ -35,8 +35,7 @@ class Compound:
         self.w = np.dot(n, self.MOLECULAR_WEIGHTS)  # Molecular weight_col (g/mol) or (g/C-mol)
 
         self.name = name
-        if chemical_formula is not None:
-            self._chemical_formula = chemical_formula
+        self._chemical_formula = chemical_formula
 
     @property
     def chemical_formula(self):
@@ -54,6 +53,8 @@ class Compound:
 
     def __str__(self):
         return self.chemical_formula
+
+    # TODO: __repr__ function
 
     @property
     def description(self):
@@ -141,13 +142,13 @@ class Composition:
         else:
             raise Exception("Invalid input for N-Waste")
 
-        self.X = self.set_organic_compound(food, Compound.food, 'food')
-        self.V = self.set_organic_compound(structure, Compound.structure, 'structure')
-        self.E = self.set_organic_compound(reserve, Compound.reserve, 'reserve')
-        self.P = self.set_organic_compound(feces, Compound.feces, 'feces')
+        self.X = self.create_organic_compound(food, Compound.food, 'food')
+        self.V = self.create_organic_compound(structure, Compound.structure, 'structure')
+        self.E = self.create_organic_compound(reserve, Compound.reserve, 'reserve')
+        self.P = self.create_organic_compound(feces, Compound.feces, 'feces')
 
     @staticmethod
-    def set_organic_compound(compound, constructor, name):
+    def create_organic_compound(compound, constructor, name):
         if compound is None:
             return constructor()
         elif isinstance(compound, (float, int)):  # Assumes that the value to change is the specific density
@@ -227,4 +228,4 @@ class RuminantComposition(Composition):
     @property
     def mineral_symbols(self):
         return self.C.chemical_formula, self.H.chemical_formula, self.O.chemical_formula, self.N.chemical_formula, \
-               self.M.chemical_formula
+            self.M.chemical_formula
