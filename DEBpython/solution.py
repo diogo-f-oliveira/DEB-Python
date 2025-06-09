@@ -1,4 +1,6 @@
 from collections.abc import MutableSequence
+from copy import deepcopy
+
 import numpy as np
 from scipy.integrate import simpson
 
@@ -21,35 +23,35 @@ class TimeInstantSol:
         self.model_type = type(model).__name__
 
         self.organism = model.organism  # This is just a pointer to the organism, not a copy
+        model.organism.state.set_state_vars(state_vars)
+        model.organism.state.t = t
+        model.env.update()
+        self.state = deepcopy(model.organism.state)
 
         # Save state variables
         self.t = t
         self.E, self.V, self.E_H, self.E_R = state_vars
 
-        # Apply transform to the organism
-        model.transform(self.organism, t, state_vars)
-
         # Powers
-        powers = model.compute_powers(t, state_vars, compute_dissipation_power=True)
+        powers = model.compute_powers(compute_dissipation_power=True)
         self.p_A, self.p_C, self.p_S, self.p_G, self.p_J, self.p_R, self.p_D = powers
 
         # Fluxes
-        self.organic_fluxes = model.organic_fluxes(self.p_A, self.p_D, self.p_G, self.E_H)
-        self.mineral_fluxes = model.mineral_fluxes(self.p_A, self.p_D, self.p_G, self.E_H)
+        self.organic_fluxes = model.organic_fluxes(self.p_A, self.p_D, self.p_G)
+        self.mineral_fluxes = model.mineral_fluxes(self.p_A, self.p_D, self.p_G)
         # Entropy
-        self.entropy = model.entropy_generation(self.p_A, self.p_D, self.p_G, self.E_H)[0]
+        self.entropy = model.entropy_generation(self.p_A, self.p_D, self.p_G)[0]
         # Physical Length
         self.calculate_real_variables()
 
     def calculate_real_variables(self):
         """Computes real variables such as physical length, etc... (WIP)"""
-        self.physical_length = self.organism.compute_physical_length(self.V)
-        self.physical_volume = self.organism.compute_physical_volume(self.V, self.E, self.E_R)
-        self.wet_weight = self.organism.compute_wet_weight(self.V, self.E, self.E_R)
-        self.dry_weight = self.organism.compute_dry_weight(self.V, self.E, self.E_R)
+        self.physical_length = self.organism.physical_length
+        self.physical_volume = self.organism.physical_volume
+        self.wet_weight = self.organism.wet_weight
+        self.dry_weight = self.organism.dry_weight
 
         self.feed_intake = (self.organic_fluxes[0] * self.organism.comp.X.w)[0]
-
         self.carbon_dioxide = (self.mineral_fluxes[0] * self.organism.comp.C.w)[0]
         if self.model_type == 'RUM':
             self.methane = (self.mineral_fluxes[4] * self.organism.comp.M.w)[0]
@@ -194,15 +196,15 @@ class TimeIntervalSol(MutableSequence):
 
     def average_daily_gain(self, t1=0, t2=-1):
         return (self.time_instant_sols[t2].wet_weight - self.time_instant_sols[t1].wet_weight) / \
-               (self.t[t2] - self.t[t1])
+            (self.t[t2] - self.t[t1])
 
     def feed_conversion_ratio(self, t1=0, t2=-1):
         return self.total_feed_intake(t1, t2) / \
-               (self.time_instant_sols[t2].wet_weight - self.time_instant_sols[t1].wet_weight)
+            (self.time_instant_sols[t2].wet_weight - self.time_instant_sols[t1].wet_weight)
 
     def relative_growth_rate(self, t1=0, t2=-1):
         return (np.log(self.time_instant_sols[t2].wet_weight) - np.log(self.time_instant_sols[t1].wet_weight)) / \
-               (self.t[t2] - self.t[t1])
+            (self.t[t2] - self.t[t1])
 
     def compute_emissions(self, t1=0, t2=-1):
         # TODO: Add methane emissions if it is a RUM model
