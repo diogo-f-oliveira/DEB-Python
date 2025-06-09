@@ -1,9 +1,12 @@
+from .environment import Environment
 from .pet import Pet, Ruminant
 from .solution import TimeIntervalSol, TimeInstantSol
 
 from scipy.integrate import solve_ivp
 import numpy as np
 
+
+# TODO: Base Model Class
 
 class STD:
     """
@@ -19,7 +22,7 @@ class STD:
 
     MAX_STEP_SIZE = 1  # Maximum step size during integration of state equations, in days
 
-    def __init__(self, organism):
+    def __init__(self, organism: Pet, env: Environment):
         """Takes as input a Pet class or a dictionary of parameters to create a Pet class."""
 
         # Create the Pet class from the dictionary of parameters
@@ -27,14 +30,16 @@ class STD:
             organism = Pet(**organism)
         # Check that organism is a Pet class
         elif not isinstance(organism, Pet):
-            raise Exception("Input must be of class Pet or a dictionary of parameters to create a Pet class.")
-
+            raise Exception("Input must be of class Pet or a dictionary of parameters used to create a Pet class.")
         self.filter_pet(organism)
-
         self.organism = organism
+        self.state = organism.state
+
+        # Add env
+        self.env = env
+
         self.ode_sol = None  # Output from ODE solver
         self.sol = None  # Full solution including powers, fluxes and entropy
-        self.food_function = None  # Function of scaled functional feeding response (f) over time
 
     @staticmethod
     def filter_pet(organism):
@@ -44,7 +49,7 @@ class STD:
         if not valid:
             raise Exception(f"Invalid Pet parameters. {reason}")
 
-    def simulate(self, t_span, food_function=1, step_size='auto', initial_state='embryo', transformation=None):
+    def simulate(self, t_span, step_size='auto', initial_state='embryo'):
         # TODO: Add events argument for solve_ivp
         """
         Integrates state equations over time. The output from the solver is stored in self.ode_sol.
@@ -76,36 +81,22 @@ class STD:
         # Get initial state
         if initial_state == 'embryo':
             initial_state = (self.organism.E_0, self.organism.V_0, 0, 0)
-            # To avoid floating point errors and ensure simulation starts at the next stage
         elif initial_state == 'birth':
             initial_state = self.get_state_at_maturity(self.organism.E_Hb)
-            initial_state[2] += 1  # To avoid floating point errors and ensure simulation starts at the next stage
+            initial_state[2] *= (1 + 1e-6)  # To ensure simulation starts at the next stage
         elif initial_state == 'puberty':
             initial_state = self.get_state_at_maturity(self.organism.E_Hp)
-            initial_state[2] += 1  # To avoid floating point errors and ensure simulation starts at the next stage
+            initial_state[2] *= (1 + 1e-6)  # To ensure simulation starts at the next stage
         elif len(initial_state) != 4:
             raise Exception(f"Invalid input {initial_state} for initial state. The initial state must be a list or "
                             f"tuple of length 4 with format (E, V, E_H, E_R) or a specified keyword.")
-
-        # Store the food function
-        if isinstance(food_function, (float, int)):
-            self.food_function = lambda t: food_function
-        elif callable(food_function):
-            self.food_function = food_function
-        else:
-            raise Exception("Argument food_function must be a number between 0 and 1 or callable.")
-
-        # Transformations to Pet parameters during simulation
-        if callable(transformation):
-            self.transform = transformation
-        elif transformation is not None:
-            raise Exception("Transformation function must be callable.")
 
         # Integrate the state equations
         self.ode_sol = solve_ivp(self.state_changes, t_span, initial_state, t_eval=t_eval, max_step=self.MAX_STEP_SIZE)
         self.sol = TimeIntervalSol(self, self.ode_sol)
         return self.sol
 
+    # TODO: Update function to work with Environment and State paradigm
     def get_state_at_maturity(self, E_H):
         event = lambda t, states: states[2] - E_H
         event.terminal = True
@@ -117,10 +108,7 @@ class STD:
 
         return ode_sol.y[:, -1]
 
-    def transform(self, organism, t, state_vars):
-        """Function to be overriden during simulation. Applies a transformation to the parameters of the organism."""
-        return
-
+    # TODO: Update function to work with Environment and State paradigm
     def fully_grown(self, f=1, E_R=0):
         """
         Returns a TimeInstantSol of the organism at full growth for a given food level and reproduction buffer
@@ -146,21 +134,22 @@ class STD:
         :param state_vars: tuple of state variables (E, V, E_H, E_R)
         :return: derivatives of the state variables (dE, dV, dE_H, dE_R)
         """
-        # Unpacking state variables (Reserve (E), Structure (E), Maturity (E_H), Reproduction Buffer (E_R))
-        E, V, E_H, E_R = state_vars
+        # Setting state variables in State class
+        self.state.t = t
+        self.state.set_state_vars(state_vars)
 
-        # Apply transform to Pet parameters
-        self.transform(self.organism, t, state_vars)
+        # Updating the environment to time step t
+        self.env.update()
 
         # Compute powers
-        p_A, p_C, p_S, p_G, p_J, p_R, p_D = self.compute_powers(t, state_vars)
+        p_A, p_C, p_S, p_G, p_J, p_R = self.compute_powers()
 
         # Changes to state variables
         dE = p_A - p_C
         dV = p_G / self.organism.E_G
 
         # Maturity or Reproduction Buffer logic
-        if E_H < self.organism.E_Hp:
+        if self.state.E_H < self.organism.E_Hp:
             dE_H = p_R
             dE_R = 0
         else:
@@ -168,78 +157,55 @@ class STD:
             dE_R = self.organism.kap_R * p_R
         return dE, dV, dE_H, dE_R
 
-    def compute_powers(self, t, state_vars, compute_dissipation_power=False):
+    def compute_powers(self, compute_dissipation_power=False):
         """
-        Computes all powers, with the option of also calculating the dissipation power p_D
-        :param t: time
-        :param E: reserve
-        :param V: structure
-        :param E_H: maturity
-        :param E_R: reproduction buffer
-        :param compute_dissipation_power: whether to compute the dissipation power
-        :return: tuple of powers (p_A, p_C, p_S, p_G, p_J, p_R, p_D)
+        Computes all powers, with the option of also calculating the dissipation power p_D.
+        :param compute_dissipation_power: If True, computes and returns the dissipation power p_D
+        :return: tuple of powers (p_A, p_C, p_S, p_G, p_J, p_R) or (p_A, p_C, p_S, p_G, p_J, p_R, p_D) if
+        compute_dissipation_power is True.
         """
-        # Unpacking state variables (Reserve (E), Structure (E), Maturity (E_H), Reproduction Buffer (E_R))
-        E, V, E_H, E_R = state_vars
 
         # Computing powers
-        p_A = self.p_A(V, E_H, t)  # Assimilation power
-        p_C = self.p_C(E, V)  # Mobilization power
-        p_S = self.p_S(V)  # Somatic maintenance power
+        p_A = self.p_A()  # Assimilation power
+        p_S = self.p_S()  # Somatic maintenance power
+        p_C = self.p_C(p_S)  # Mobilization power
         p_G = self.p_G(p_C, p_S)  # Growth power
-        p_J = self.p_J(E_H)  # Maturity maintenance power
+        p_J = self.p_J()  # Maturity maintenance power
         p_R = self.p_R(p_C, p_J)  # Reproduction power
 
         # Dissipation power
         if compute_dissipation_power:
-            p_D = self.p_D(p_S, p_J, p_R, E_H)
+            p_D = self.p_D(p_S, p_J, p_R)
+            return p_A, p_C, p_S, p_G, p_J, p_R, p_D
         else:
-            p_D = 0
+            return p_A, p_C, p_S, p_G, p_J, p_R
 
-        return p_A, p_C, p_S, p_G, p_J, p_R, p_D
-
-    def p_A(self, V, E_H, t):
-        """
-        Computes the assimilation power p_A.
-
-        :param V: Scalar or array of Structure values
-        :param E_H: Scalar or array of Maturity values
-        :param t: Scalar or array of Time values
-        :return: Scalar or array of assimilation power p_A values
-        """
-        if type(E_H) == np.ndarray:
-            # Preallocate p_A
-            p_A = np.zeros_like(E_H)
-            for i, (structure, maturity, time) in enumerate(zip(V, E_H, t)):
-                if maturity < self.organism.E_Hb:  # Embryo life stage
-                    p_A[i] = 0
-                else:
-                    p_A[i] = self.organism.p_Am * self.food_function(time) * (structure ** (2 / 3))
-            return p_A
+    def p_A(self):
+        """Computes the assimilation power"""
+        if self.state.E_H < self.organism.E_Hb:
+            return 0
         else:
-            if E_H < self.organism.E_Hb:  # Embryo life stage
-                return 0
-            else:
-                return self.organism.p_Am * self.food_function(t) * (V ** (2 / 3))
+            return self.state.p_X * self.organism.kap_X
 
-    def p_C(self, E, V):
+    def p_C(self, p_S):
         """
         Computes the mobilization power p_C.
 
-        :param E: Scalar or array of Reserve values
-        :param V: Scalar or array of Structure values
-        :return: Scalar or array of mobilization power p_C values
+        :param p_S: Scalar of somatic maintenance power p_S value
+        :return: Scalar of mobilization power p_C value
         """
-        return E * (self.organism.E_G * self.organism.v * (V ** (-1 / 3)) + self.organism.p_M) / \
-               (self.organism.kap * E / V + self.organism.E_G)
+        E, V = self.state.E, self.state.V
+        return (E / V) * (self.organism.E_G * self.organism.v * (V ** (2 / 3)) + p_S) / \
+            (self.organism.kap * (E / V) + self.organism.E_G)
 
-    def p_S(self, V):
+    def p_S(self):
         """
-        Computes the somatic maintenance power p_S.º
+        Computes the somatic maintenance power p_S.
 
-        :param V: Scalar or array of Structure values
-        :return: Scalar or array of somatic maintenance power p_S values
+        :return: Scalar of somatic maintenance power p_S values
         """
+
+        V = self.state.V
         return self.organism.p_M * V + self.organism.p_T * (V ** (2 / 3))
 
     def p_G(self, p_C, p_S):
@@ -252,26 +218,11 @@ class STD:
         """
         return self.organism.kap * p_C - p_S
 
-    def p_J(self, E_H):
-        """
-        Computes the maturity maintenance power p_J
-
-        :param E_H: Scalar or array of Maturity values
-        :return: Scalar or array of maturity maintenance power p_J values
-        """
-        if type(E_H) == np.ndarray:
-            p_J = np.zeros_like(E_H)
-            for i, maturity in enumerate(E_H):
-                if maturity < self.organism.E_Hp:
-                    p_J[i] = self.organism.k_J * maturity
-                else:  # Adult life stage
-                    p_J[i] = self.organism.k_J * self.organism.E_Hp
-            return p_J
-        else:
-            if E_H < self.organism.E_Hp:
-                return self.organism.k_J * E_H
-            else:  # Adult life stage
-                return self.organism.k_J * self.organism.E_Hp
+    def p_J(self):
+        if self.state.E_H < self.organism.E_Hp:
+            return self.organism.k_J * self.state.E_H
+        else:  # Adult life stage
+            return self.organism.k_J * self.organism.E_Hp
 
     def p_R(self, p_C, p_J):
         """
@@ -283,7 +234,7 @@ class STD:
         """
         return (1 - self.organism.kap) * p_C - p_J
 
-    def p_D(self, p_S, p_J, p_R, E_H):
+    def p_D(self, p_S, p_J, p_R):
         """
         Computes the dissipation power p_D
 
@@ -293,27 +244,17 @@ class STD:
         :param E_H: Scalar or array of Maturity values
         :return: Scalar or array of dissipation power p_D values
         """
-        if type(E_H) == np.ndarray:
-            p_D = np.zeros_like(E_H)
-            for i, (somatic_power, maturity_power, reproduction_power, maturity) in enumerate(zip(p_S, p_J, p_R, E_H)):
-                if maturity < self.organism.E_Hp:
-                    p_D[i] = somatic_power + maturity_power + reproduction_power
-                else:
-                    p_D[i] = somatic_power + maturity_power + (1 - self.organism.kap_R) * reproduction_power
-            return p_D
+        if self.state.E_H < self.organism.E_Hp:
+            return p_S + p_J + p_R
         else:
-            if E_H < self.organism.E_Hp:
-                return p_S + p_J + p_R
-            else:
-                return p_S + p_J + (1 - self.organism.kap_R) * p_R
+            return p_S + p_J + (1 - self.organism.kap_R) * p_R
 
-    def organic_fluxes(self, p_A, p_D, p_G, E_H):
+    def organic_fluxes(self, p_A, p_D, p_G):
         """
         Computes the organic fluxes from the assimilation power p_A, dissipation power p_D and growth power p_G.
         :param p_A: Scalar or array of assimilation power values
         :param p_D: Scalar or array of dissipation power values
         :param p_G: Scalar or array of growth power values
-        :param E_H: Maturity level
         :return: array of mineral fluxes values. Each row corresponds to the flux of CO2, H2O, O2 and N-Waste
             respectively.
         """
@@ -324,13 +265,12 @@ class STD:
         powers = np.array([p_A, p_D, p_G])
         return self.organism.eta_O @ powers
 
-    def mineral_fluxes(self, p_A, p_D, p_G, E_H):
+    def mineral_fluxes(self, p_A, p_D, p_G):
         """
         Computes the mineral fluxes from the assimilation power p_A, dissipation power p_D and growth power p_G.
         :param p_A: Scalar or array of assimilation power values
         :param p_D: Scalar or array of dissipation power values
         :param p_G: Scalar or array of growth power values
-        :param E_H: Maturity level
         :return: array of mineral fluxes values. Each row corresponds to the flux of CO2, H2O, O2 and N-Waste
             respectively in mol/d.
         """
@@ -341,7 +281,7 @@ class STD:
         powers = np.array([p_A, p_D, p_G])
         return self.organism.eta_M @ powers
 
-    def entropy_generation(self, p_A, p_D, p_G, E_H):
+    def entropy_generation(self, p_A, p_D, p_G):
         """
         Computes the entropy from the assimilation power p_A, dissipation power p_D and growth power p_G.
         :param p_A: Scalar or array of assimilation power values
@@ -355,7 +295,7 @@ class STD:
             p_G = np.array([p_G])
         powers = np.array([p_A, p_D, p_G])
         return (self.organism.comp.h_M @ np.linalg.inv(self.organism.comp.n_M) @ self.organism.comp.n_O
-                - self.organism.comp.h_O) @ self.organism.gamma_O @ powers / self.organism.T / self.organism.comp.E.mu
+                - self.organism.comp.h_O) @ self.organism.gamma_O @ powers / self.state.T / self.organism.comp.E.mu
 
 
 class STX(STD):
@@ -381,17 +321,13 @@ class STX(STD):
 
         # Check that the Pet class has parameters t_0 and E_Hx defined
         if not hasattr(organism, 't_0') or not hasattr(organism, 'E_Hx'):
-            raise Exception('The organism is not compatible with model STX: parameters t_0 and E_Hx are required.')
+            raise Exception('The organism is not compatible with model STX: parameters t_0 and E_Hx must be defined.')
         elif organism.t_0 <= 0:
             raise Exception("The time until start of development can't be negative.")
         elif organism.E_Hx <= organism.E_Hb or organism.E_Hx >= organism.E_Hp:
-            raise Exception("The weaning maturity level must be larger than the maturity at birth and smaller than "
-                            "maturity at puberty.")
-        # Set f_milk to 1 if it is not defined
-        if not hasattr(organism, 'f_milk'):
-            setattr(organism, 'f_milk', 1)
-        elif organism.f_milk <= 0:
-            raise Exception("The parameter f_milk must be positive.")
+            raise Exception("The maturity at weaning E_Hx must be larger than the maturity at birth and smaller "
+                            "than maturity at puberty.")
+
         # Set the energy density of the mother to the maximum energy density
         if not hasattr(organism, 'E_density_mother'):
             setattr(organism, 'E_density_mother', organism.E_m)
@@ -401,12 +337,8 @@ class STX(STD):
     def simulate(self, t_span, food_function=1, step_size='auto', initial_state='embryo', transformation=None):
         if initial_state == 'weaning':
             initial_state = self.get_state_at_maturity(self.organism.E_Hx)
-            # TODO: Think of another way to do this, as the value is fine for ruminants, but for other smaller organisms
-            #  it is rather large
-            initial_state[2] += 1  # To avoid floating point errors and ensure simulation starts at the next stage
-        return super().simulate(t_span=t_span, food_function=food_function, step_size=step_size,
-                                initial_state=initial_state,
-                                transformation=transformation)
+            initial_state[2] *= (1 + 1e-6)  # To ensure simulation starts at the next stage
+        return super().simulate(t_span=t_span, step_size=step_size, initial_state=initial_state, )
 
     def state_changes(self, t, state_vars):
         """
@@ -417,21 +349,22 @@ class STX(STD):
         :return: derivatives of the state variables (dE, dV, dE_H, dE_R)
         """
 
-        # Unpacking state variables (Reserve (E), Structure (E), Maturity (E_H), Reproduction Buffer (E_R))
-        E, V, E_H, E_R = state_vars
+        # Setting state variables in State class
+        self.state.t = t
+        self.state.set_state_vars(state_vars)
 
-        # Apply transform to Pet parameters
-        self.transform(self.organism, t, state_vars)
+        # Updating the environment to time step t
+        self.env.update()
 
         # Compute powers
-        p_A, p_C, p_S, p_G, p_J, p_R, p_D = self.compute_powers(t, state_vars)
+        p_A, p_C, p_S, p_G, p_J, p_R = self.compute_powers()
 
         # Pet is a foetus
-        if E_H < self.organism.E_Hb:
+        if self.state.E_H < self.organism.E_Hb:
             if t < self.organism.t_0:  # Gestation doesn't start until t=t_0
                 dE, dV, dE_H, dE_R = 0, 0, 0, 0
             else:
-                dE = self.organism.v * self.organism.E_density_mother * (V ** (2 / 3))
+                dE = self.organism.v * self.organism.E_density_mother * (self.state.V ** (2 / 3))
                 dV = p_G / self.organism.E_G
                 dE_H = p_R
                 dE_R = 0
@@ -439,7 +372,7 @@ class STX(STD):
             dE = p_A - p_C
             dV = p_G / self.organism.E_G
             # Maturity or Reproduction Buffer logic
-            if E_H < self.organism.E_Hp:
+            if self.state.E_H < self.organism.E_Hp:
                 dE_H = p_R
                 dE_R = 0
             else:
@@ -448,7 +381,7 @@ class STX(STD):
 
         return dE, dV, dE_H, dE_R
 
-    def compute_powers(self, t, state_vars, compute_dissipation_power=False):
+    def compute_powers(self, compute_dissipation_power=False):
         """
         Computes all powers, with the option of also calculating the dissipation power p_D
         :param t: time
@@ -459,26 +392,23 @@ class STX(STD):
         :param compute_dissipation_power: whether to compute the dissipation power
         :return: tuple of powers (p_A, p_C, p_S, p_G, p_J, p_R, p_D)
         """
-        # Unpacking state variables (Reserve (E), Structure (E), Maturity (E_H), Reproduction Buffer (E_R))
-        E, V, E_H, E_R = state_vars
 
         # Computing powers
-        p_A = self.p_A(V, E_H, t)  # Assimilation power
-        p_C = self.p_C(E, V)  # Mobilization power
-        p_S = self.p_S(V)  # Somatic maintenance power
-        p_G = self.p_G(p_C, p_S, V, E_H)  # Growth power
-        p_J = self.p_J(E_H)  # Maturity maintenance power
-        p_R = self.p_R(p_C, p_J, p_S, p_G, E_H)  # Reproduction power
+        p_A = self.p_A()  # Assimilation power
+        p_S = self.p_S()  # Somatic maintenance power
+        p_C = self.p_C(p_S)  # Mobilization power
+        p_G = self.p_G(p_C, p_S)  # Growth power
+        p_J = self.p_J()  # Maturity maintenance power
+        p_R = self.p_R(p_C, p_J, p_S, p_G)  # Reproduction power
 
         # Dissipation power
         if compute_dissipation_power:
-            p_D = self.p_D(p_S, p_J, p_R, E_H)
+            p_D = self.p_D(p_S, p_J, p_R)
+            return p_A, p_C, p_S, p_G, p_J, p_R, p_D
         else:
-            p_D = 0
+            return p_A, p_C, p_S, p_G, p_J, p_R
 
-        return p_A, p_C, p_S, p_G, p_J, p_R, p_D
-
-    def p_A(self, V, E_H, t):
+    def p_A(self):
         """
         Computes the assimilation power p_A.
 
@@ -487,25 +417,14 @@ class STX(STD):
         :param t: Scalar or array of Time values
         :return: Scalar or array of assimilation power p_A values
         """
-        if type(E_H) == np.ndarray:
-            p_A = np.zeros_like(E_H)
-            for i, (structure, maturity, time) in enumerate(zip(V, E_H, t)):
-                if maturity < self.organism.E_Hb:  # Pet is a foetus
-                    p_A[i] = 0
-                elif maturity < self.organism.E_Hx:  # Baby stage
-                    p_A[i] = self.organism.p_Am * self.organism.f_milk * (structure ** (2 / 3))
-                else:  # Adult
-                    p_A[i] = self.organism.p_Am * self.food_function(time) * (structure ** (2 / 3))
-            return p_A
-        else:
-            if E_H < self.organism.E_Hb:  # Pet is a foetus
-                return 0
-            elif E_H < self.organism.E_Hx:  # Baby stage
-                return self.organism.p_Am * self.organism.f_milk * (V ** (2 / 3))
-            else:  # Adult
-                return self.organism.p_Am * self.food_function(t) * (V ** (2 / 3))
+        if self.state.E_H < self.organism.E_Hb:  # Pet is a foetus
+            return 0
+        elif self.state.E_H < self.organism.E_Hx:  # Baby stage
+            return self.organism.p_Am * self.organism.f_milk * (self.state.V ** (2 / 3))
+        else:  # Adult
+            return self.state.p_X * self.organism.kap_X
 
-    def p_G(self, p_C, p_S, V, E_H):
+    def p_G(self, p_C, p_S):
         """
         Computes the growth power p_G.
 
@@ -515,21 +434,13 @@ class STX(STD):
         :param E_H: Scalar or array of Maturity values
         :return: Scalar or array of growth power p_G values
         """
-        if type(E_H) == np.ndarray:
-            p_G = np.zeros_like(E_H)
-            for i, (maturity, mobil, soma_maint, structure) in enumerate(zip(E_H, p_C, p_S, V)):
-                if maturity < self.organism.E_Hb:  # Pet is a foetus
-                    p_G[i] = self.organism.E_G * self.organism.v * (structure ** (2 / 3))
-                else:
-                    p_G[i] = self.organism.kap * mobil - soma_maint
-            return p_G
-        else:
-            if E_H < self.organism.E_Hb:  # Pet is a foetus
-                return self.organism.E_G * self.organism.v * (V ** (2 / 3))
-            else:
-                return self.organism.kap * p_C - p_S
 
-    def p_R(self, p_C, p_J, p_S, p_G, E_H):
+        if self.state.E_H < self.organism.E_Hb:  # Pet is a foetus
+            return self.organism.E_G * self.organism.v * (self.state.V ** (2 / 3))
+        else:
+            return self.organism.kap * p_C - p_S
+
+    def p_R(self, p_C, p_J, p_S, p_G):
         """
         Computes the reproduction power p_R
 
@@ -540,23 +451,15 @@ class STX(STD):
         :param E_H: Scalar or array of Maturity values
         :return: Scalar or array of reproduction power p_R values
         """
-        if type(E_H) == np.ndarray:
-            p_R = np.zeros_like(E_H)
-            for i, (maturity, mobil, mat_maint, soma_maint, growth) in enumerate(zip(E_H, p_C, p_J, p_S, p_G)):
-                if maturity < self.organism.E_Hb:  # Pet is a foetus
-                    p_R[i] = (1 - self.organism.kap) * (soma_maint + growth) / self.organism.kap - mat_maint
-                else:
-                    p_R[i] = (1 - self.organism.kap) * mobil - mat_maint
-            return p_R
+
+        if self.state.E_H < self.organism.E_Hb:  # Pet is a foetus
+            return (1 - self.organism.kap) * (p_S + p_G) / self.organism.kap - p_J
         else:
-            if E_H < self.organism.E_Hb:  # Pet is a foetus
-                return (1 - self.organism.kap) * (p_S + p_G) / self.organism.kap - p_J
-            else:
-                return (1 - self.organism.kap) * p_C - p_J
+            return (1 - self.organism.kap) * p_C - p_J
 
 
 class RUM(STX):
-    def __init__(self, organism):
+    def __init__(self, organism: Ruminant, env: Environment):
         """Takes as input a Ruminant class or a dictionary of parameters to create a Pet class."""
 
         # Create the Pet class from the dictionary of parameters
@@ -565,15 +468,17 @@ class RUM(STX):
         # Check that organism is a Pet class
         elif not isinstance(organism, Ruminant):
             raise Exception("Input must be of class Ruminant or a dictionary of parameters to create a Ruminant class.")
-
         self.filter_pet(organism)
-
         self.organism = organism
+        self.state = organism.state
+
+        # Add env
+        self.env = env
+
         self.ode_sol = None  # Output from ODE solver
         self.sol = None  # Full solution including powers, fluxes and entropy
-        self.food_function = None  # Function of scaled functional feeding response (f) over time
 
-    def mineral_fluxes(self, p_A, p_D, p_G, E_H):
+    def mineral_fluxes(self, p_A, p_D, p_G):
         """
         Computes the mineral fluxes using the basic organic powers. Until weaning, the organism does not ruminate and
         therefore the standard assimilation equation applies. Afterwards, both sub transformations occur. The mineral
@@ -590,7 +495,7 @@ class RUM(STX):
             p_G = np.array([p_G])
         powers = np.array([p_A, p_D, p_G])
 
-        if E_H < self.organism.E_Hx:  # Use standard assimilation reaction
+        if self.state.E_H < self.organism.E_Hx:  # Use standard assimilation reaction
             mineral_fluxes = self.organism.eta_M_CO2 @ powers
             mineral_fluxes = np.pad(mineral_fluxes, ((0, 1), (0, 0)))
         else:  # Consider production of methane during rumination
@@ -598,7 +503,7 @@ class RUM(STX):
             mineral_fluxes = eta_M @ powers
         return mineral_fluxes
 
-    def entropy_generation(self, p_A, p_D, p_G, E_H):
+    def entropy_generation(self, p_A, p_D, p_G):
         """
         Computes the entropy generated using the basic organic powers. Until weaning, the organism does not ruminate and
         therefore the standard assimilation equation applies. Afterwards, both sub transformations occur.
@@ -613,9 +518,43 @@ class RUM(STX):
             p_D = np.array([p_D])
             p_G = np.array([p_G])
         powers = np.array([p_A, p_D, p_G])
-        if E_H < self.organism.E_Hx:  # Use standard assimilation reaction
+        if self.state.E_H < self.organism.E_Hx:  # Use standard assimilation reaction
             return -(self.organism.comp.h_M[:-1] @ self.organism.gamma_M_CO2 + self.organism.comp.h_O @
                      self.organism.gamma_O) @ powers / self.organism.T / self.organism.comp.E.mu
         else:  # Consider production of methane during rumination
             return -(self.organism.comp.h_M @ self.organism.gamma_M + self.organism.comp.h_O @ self.organism.gamma_O) \
-                   @ powers / self.organism.T / self.organism.comp.E.mu
+                @ powers / self.organism.T / self.organism.comp.E.mu
+
+
+class ABJ(STD):
+    def __init__(self, organism: Pet, env: Environment):
+        super(ABJ, self).__init__(organism, env)
+        self.L_b = None
+        self.L_j = None
+
+    def filter_pet(self, organism):
+        super(ABJ, self).filter_pet(organism)
+
+        # Check that the Pet class has parameters E_Hj defined
+        if not hasattr(organism, 'E_Hx'):
+            raise Exception('The organism is not compatible with model ABJ: parameter and E_Hj must be defined.')
+        elif organism.E_Hj <= organism.E_Hb or organism.E_Hj >= organism.E_Hp:
+            raise Exception("The maturity at metamorphosis E_Hj must be larger than the maturity at birth and smaller "
+                            "than maturity at puberty.")
+
+    def p_A(self):
+        if self.state.E_H < self.organism.E_Hb:
+            return 0
+        elif self.state.E_H < self.organism.E_Hj:
+            return self.state.p_X * self.organism.kap_X * (self.state.V ** (2 / 3))
+        else:
+            return self.state.p_X * self.organism.kap_X
+
+    def p_C(self, p_S):
+        E, V = self.state.E, self.state.V
+        return (E / V) * (self.organism.E_G * self.organism.v * (V ** (2 / 3)) + p_S) / \
+            (self.organism.kap + self.organism.E_G * V / E)
+
+    @property
+    def s_M(self):
+        return
