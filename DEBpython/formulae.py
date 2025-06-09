@@ -26,8 +26,8 @@ def somatic_maintenance_power(pet: Pet, t, L_i, t0=0.0, f=1.0):
     return pet.p_M * np.power(L, 3) + pet.p_T * np.power(L, 2)
 
 
-def maturity_maintenance_power(pet: Pet, maturity):
-    return pet.k_J * maturity
+def maturity_maintenance_power(pet: Pet, E_H):
+    return pet.k_J * E_H
 
 
 def growth_power(pet: Pet, t, L_i, t0=0.0, f=1.0):
@@ -72,9 +72,10 @@ def cumulative_feed_intake_curve(pet: Pet, t, W_i, t0=0.0, f=1.0):
     W_conv_factor = 1 + f * pet.omega
     L_i = np.power(W_i / W_conv_factor, 1 / 3)
     L_inf = pet.L_inf(f=f)
+    r_B = pet.r_B(f=f)
     L = length_curve(pet, t, L_i, t0=t0, f=f)
     coef = f * pet.comp.X.w / pet.comp.X.mu / pet.kap_X * pet.p_Am
-    return coef * ((L_inf ** 2) * (t - t0) - 0.5 / pet.r_B(f=f) * ((L_inf + L) ** 2 - (L_inf + L_i) ** 2))
+    return coef * ((L_inf ** 2) * (t - t0) - 0.5 / r_B * ((L_inf + L) ** 2 - (L_inf + L_i) ** 2))
 
 
 def dynamic_feed_conversion_ratio(pet: Pet, t, W_i, t0=0.0, f=1.0):

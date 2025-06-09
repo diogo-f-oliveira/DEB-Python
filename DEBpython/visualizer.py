@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 tex_par_symbols = {
     'p_Am': r'\{\dot{p}_{Am}\}',
-    'p_M': r'\dot{p}_M',
+    'p_M': r'[\dot{p}_M]',
     'v': r'\dot{v}',
     'kap': r'\kappa',
     'kap_X': r'\kappa_X',
