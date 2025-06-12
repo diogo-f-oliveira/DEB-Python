@@ -162,6 +162,11 @@ class Composition:
         else:
             raise Exception(f"Invalid input for {name}")
 
+    @classmethod
+    def standard(cls, n_waste=None, d=0.3):
+        return cls(n_waste=n_waste, food=d, structure=d, reserve=d, feces=d)
+
+
     @property
     def n_O(self):
         """Matrix of chemical indices of organic compounds."""
