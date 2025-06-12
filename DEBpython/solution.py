@@ -29,8 +29,9 @@ class TimeInstantSol:
         self.state = deepcopy(model.organism.state)
 
         # Save state variables
-        self.t = t
-        self.E, self.V, self.E_H, self.E_R = state_vars
+        # TODO: either delete or make it independent
+        # self.t = t
+        # self.E, self.V, self.E_H, self.E_R = state_vars
 
         # Powers
         powers = model.compute_powers(compute_dissipation_power=True)
@@ -75,7 +76,9 @@ class TimeIntervalSol(MutableSequence):
         self.t = ode_sol.t
         self._time_to_index = {self.t[i]: i for i in range(len(self.t))}
 
-        self.E, self.V, self.E_H, self.E_R = ode_sol.y
+        for i, state_var in enumerate(model.organism.state.STATE_VARS):
+            setattr(self, state_var, ode_sol.y[i, :])
+        # self.E, self.V, self.E_H, self.E_R = ode_sol.y
 
         self.time_instant_sols = [TimeInstantSol(self.model, self.t[i], ode_sol.y[:, i]) for i in range(len(self.t))]
 
