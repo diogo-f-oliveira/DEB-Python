@@ -26,7 +26,7 @@ class Pet:
     T_REF = 293.15  # Reference temperature (K)
 
     def __init__(self, p_Am, kap, v, p_M, E_G, k_J, E_Hb, E_Hp, kap_R, state=None, comp=None, p_T=0, kap_X=0.8,
-                 kap_P=0.1, T_typical=T_REF, E_0=1e6, V_0=1e-12, T_A=8000, del_M=1, **additional_parameters):
+                 kap_P=0.1, T_typical=T_REF, E_0=1e6, V_0=1e-10, T_A=8000, del_M=1, **additional_parameters):
 
         # Parameters
         self.E_G = E_G  # Specific cost for Structure (J/cm^3)
@@ -475,4 +475,8 @@ animals = {
     'ovis_aries_lacaune': dict(E_G=7828, p_Am=2289.55, v=1.845, p_M=57.54, kap=0.955, k_J=0.002, kap_R=0.95,
                                E_Hb=1.656e+06, E_Hp=6.298e+07, E_Hx=6.345e+06, t_0=126.5, f_milk=1, del_M=0.2688914292,
                                kap_X=0.8, rum_fraction=0.3, T_typical=311.75),
+    'Danio_rerio': dict(E_G=5267.41, p_Am=150.724, v=0.0196, p_M=243.001, kap=0.35756, k_J=0.002, kap_R=0.95,
+                        E_Hb=0.7925, E_Hj=37.26, E_Hp=2361, E_0=1.81032, T_typical=273.15, del_M=0.14246,
+                        comp=Composition.standard(n_waste='ammonia', d=0.2)),
+
 }
