@@ -1,3 +1,5 @@
+import numpy as np
+
 from .composition import Compound
 
 
@@ -16,7 +18,7 @@ class State:
 
     def __init__(self):
         # Time
-        self.t = 0
+        self.t = 0.
         # State variables
         for var, default_type in self.STATE_VARS.items():
             setattr(self, var, default_type())
@@ -40,16 +42,16 @@ class State:
             setattr(self, var, val)
 
     @property
-    def state(self):
-        return (getattr(self, var) for var in self.STATE_VARS)
+    def state_values(self):
+        return np.array(list(getattr(self, var) for var in self.STATE_VARS))
 
     @property
     def state_names(self):
         return list(self.STATE_VARS.keys())
 
     @property
-    def environment_state(self):
-        return (getattr(self, var) for var in self.ENV_VARS)
+    def env_state_values(self):
+        return np.array(getattr(self, var) for var in self.ENV_VARS)
 
     def check_state_validity(self, state_values):
         if len(state_values) != len(self.STATE_VARS):
@@ -84,7 +86,7 @@ class ABJState(State):
         'V': float,
         'E_H': float,
         'E_R': float,
-        's_M': float,
+        's_Hjb': float,
     }
     ENV_VARS = {
         'T': float,

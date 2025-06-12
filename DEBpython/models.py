@@ -1,6 +1,7 @@
 from .environment import Environment
 from .pet import Pet, Ruminant
 from .solution import TimeIntervalSol, TimeInstantSol
+from .state import ABJState
 
 from scipy.integrate import solve_ivp
 import numpy as np
@@ -49,7 +50,8 @@ class STD:
         if not valid:
             raise Exception(f"Invalid Pet parameters. {reason}")
 
-    def simulate(self, t_span, step_size='auto', initial_state='embryo'):
+    def simulate(self, t_span, step_size='auto', initial_state=None):
+        # TODO: Fix arguments
         # TODO: Add events argument for solve_ivp
         """
         Integrates state equations over time. The output from the solver is stored in self.ode_sol.
@@ -78,21 +80,26 @@ class STD:
             raise Exception(f"Invalid step size value: {step_size}. Please select 'auto' for automatic step size during"
                             f" integration or input a fixed step size.")
 
-        # Get initial state
-        if initial_state == 'embryo':
-            initial_state = (self.organism.E_0, self.organism.V_0, 0, 0)
-        elif initial_state == 'birth':
-            initial_state = self.get_state_at_maturity(self.organism.E_Hb)
-            initial_state[2] *= (1 + 1e-6)  # To ensure simulation starts at the next stage
-        elif initial_state == 'puberty':
-            initial_state = self.get_state_at_maturity(self.organism.E_Hp)
-            initial_state[2] *= (1 + 1e-6)  # To ensure simulation starts at the next stage
-        elif len(initial_state) != 4:
-            raise Exception(f"Invalid input {initial_state} for initial state. The initial state must be a list or "
-                            f"tuple of length 4 with format (E, V, E_H, E_R) or a specified keyword.")
+        # # Get initial state
+        # if initial_state == 'embryo':
+        #     initial_state = (self.organism.E_0, self.organism.V_0, 0, 0)
+        # elif initial_state == 'birth':
+        #     initial_state = self.get_state_at_maturity(self.organism.E_Hb)
+        #     initial_state[2] *= (1 + 1e-6)  # To ensure simulation starts at the next stage
+        # elif initial_state == 'puberty':
+        #     initial_state = self.get_state_at_maturity(self.organism.E_Hp)
+        #     initial_state[2] *= (1 + 1e-6)  # To ensure simulation starts at the next stage
+        # elif len(initial_state) != len(self.organism.state.STATE_VARS):
+        #     # TODO: Call check_state_validity method of State class
+        #     raise Exception(f"Invalid input {initial_state} for initial state. The initial state must be a list or "
+        #                     f"tuple of length 4 with format (E, V, E_H, E_R) or a specified keyword.")
+
+        if not isinstance(initial_state, type(self.organism.state)):
+            raise Exception(f"Initial state must be of type {type(self.organism.state)}")
 
         # Integrate the state equations
-        self.ode_sol = solve_ivp(self.state_changes, t_span, initial_state, t_eval=t_eval, max_step=self.MAX_STEP_SIZE)
+        self.ode_sol = solve_ivp(self.state_changes, t_span, initial_state.state_values, t_eval=t_eval,
+                                 max_step=self.MAX_STEP_SIZE)
         self.sol = TimeIntervalSol(self, self.ode_sol)
         return self.sol
 
@@ -196,7 +203,7 @@ class STD:
         """
         E, V = self.state.E, self.state.V
         return (E / V) * (self.organism.E_G * self.organism.v * (V ** (2 / 3)) + p_S) / \
-            (self.organism.kap * (E / V) + self.organism.E_G)
+            (self.organism.kap + self.organism.E_G * V / E)
 
     def p_S(self):
         """
@@ -529,32 +536,64 @@ class RUM(STX):
 class ABJ(STD):
     def __init__(self, organism: Pet, env: Environment):
         super(ABJ, self).__init__(organism, env)
-        self.L_b = None
-        self.L_j = None
+        if not isinstance(organism.state, ABJState):
+            raise Exception("Pet must have a state of type ABJState to run this model.")
 
     def filter_pet(self, organism):
         super(ABJ, self).filter_pet(organism)
 
         # Check that the Pet class has parameters E_Hj defined
-        if not hasattr(organism, 'E_Hx'):
-            raise Exception('The organism is not compatible with model ABJ: parameter and E_Hj must be defined.')
+        if not hasattr(organism, 'E_Hj'):
+            raise Exception('The organism is not compatible with model ABJ: parameter E_Hj must be defined.')
         elif organism.E_Hj <= organism.E_Hb or organism.E_Hj >= organism.E_Hp:
             raise Exception("The maturity at metamorphosis E_Hj must be larger than the maturity at birth and smaller "
                             "than maturity at puberty.")
 
+    def state_changes(self, t, state_vars):
+        """
+               Computes the derivatives of the state variables according to the standard DEB model equations. Function used in
+               the integration solver.
+               :param t: time
+               :param state_vars: tuple of state variables (E, V, E_H, E_R)
+               :return: derivatives of the state variables (dE, dV, dE_H, dE_R)
+               """
+        # Setting state variables in State class
+        self.state.t = t
+        self.state.set_state_vars(state_vars)
+
+        # Updating the environment to time step t
+        self.env.update()
+
+        # Compute powers
+        p_A, p_C, p_S, p_G, p_J, p_R = self.compute_powers()
+
+        # Changes to state variables
+        dE = p_A - p_C
+        dV = p_G / self.organism.E_G
+
+        # Maturity or Reproduction Buffer logic
+        if self.state.E_H < self.organism.E_Hp:
+            dE_H = p_R
+            dE_R = 0
+        else:
+            dE_H = 0
+            dE_R = self.organism.kap_R * p_R
+
+        # Updating s_Hjb = Lj / Lb
+        if self.organism.E_Hb < self.state.E_H < self.organism.E_Hj:
+            ds_Hjb = self.state.s_Hjb / 3 / self.state.V * dV
+        else:
+            ds_Hjb = 0
+
+        return dE, dV, dE_H, dE_R, ds_Hjb
+
     def p_A(self):
         if self.state.E_H < self.organism.E_Hb:
             return 0
-        elif self.state.E_H < self.organism.E_Hj:
-            return self.state.p_X * self.organism.kap_X * (self.state.V ** (2 / 3))
         else:
-            return self.state.p_X * self.organism.kap_X
+            return self.state.p_X * self.organism.kap_X * self.state.s_Hjb
 
     def p_C(self, p_S):
-        E, V = self.state.E, self.state.V
-        return (E / V) * (self.organism.E_G * self.organism.v * (V ** (2 / 3)) + p_S) / \
-            (self.organism.kap + self.organism.E_G * V / E)
-
-    @property
-    def s_M(self):
-        return
+        E, V, s_Hjb = self.state.E, self.state.V, self.state.s_Hjb
+        return (E / V) * (self.organism.E_G * self.organism.v * (V ** (2 / 3)) * s_Hjb + p_S) / \
+            (self.organism.kap * E / V + self.organism.E_G)
