@@ -107,55 +107,55 @@ def methane_emissions_curve(pet: Ruminant, t, W_i, t0=0.0, f=1.0):
 
 
 def co2_emissions_curve(pet: Pet, t, W_i, t0=0.0, f=1.0, assimilation=True, growth=True, dissipation=True):
-    select_fluxes = np.diag(np.array([assimilation, growth, dissipation], dtype=float))
+    select_fluxes = np.diag(np.array([assimilation, dissipation, growth], dtype=float))
     W_conv_factor = 1 + f * pet.omega
     L_i = np.power(W_i / W_conv_factor, 1 / 3)
     p_A = assimilation_power(pet, t, L_i=L_i, t0=t0, f=f)
-    p_G = growth_power(pet, t, L_i, t0=t0, f=f)
     p_D = dissipation_power(pet, t, L_i, t0=t0, f=f)
+    p_G = growth_power(pet, t, L_i, t0=t0, f=f)
     p = np.array([p_A, p_D, p_G])
     return pet.comp.C.w * pet.eta_M[0, :] @ select_fluxes @ p
 
 
 def oxygen_consumption_curve(pet: Pet, t, W_i, t0=0.0, f=1.0, assimilation=True, growth=True, dissipation=True):
-    select_fluxes = np.diag(np.array([assimilation, growth, dissipation], dtype=float))
+    select_fluxes = np.diag(np.array([assimilation, dissipation, growth], dtype=float))
     W_conv_factor = 1 + f * pet.omega
     L_i = np.power(W_i / W_conv_factor, 1 / 3)
     p_A = assimilation_power(pet, t, L_i=L_i, t0=t0, f=f)
-    p_G = growth_power(pet, t, L_i, t0=t0, f=f)
     p_D = dissipation_power(pet, t, L_i, t0=t0, f=f)
+    p_G = growth_power(pet, t, L_i, t0=t0, f=f)
     p = np.array([p_A, p_D, p_G])
     return pet.comp.O.w * pet.eta_M[2, :] @ select_fluxes @ p
 
 
 def water_production_curve(pet: Pet, t, W_i, t0=0.0, f=1.0, assimilation=True, growth=True, dissipation=True):
-    select_fluxes = np.diag(np.array([assimilation, growth, dissipation], dtype=float))
+    select_fluxes = np.diag(np.array([assimilation, dissipation, growth], dtype=float))
     W_conv_factor = 1 + f * pet.omega
     L_i = np.power(W_i / W_conv_factor, 1 / 3)
     p_A = assimilation_power(pet, t, L_i=L_i, t0=t0, f=f)
-    p_G = growth_power(pet, t, L_i, t0=t0, f=f)
     p_D = dissipation_power(pet, t, L_i, t0=t0, f=f)
+    p_G = growth_power(pet, t, L_i, t0=t0, f=f)
     p = np.array([p_A, p_D, p_G])
     return pet.comp.H.w * pet.eta_M[1, :] @ select_fluxes @ p
 
 
 def n_waste_production_curve(pet: Pet, t, W_i, t0=0.0, f=1.0, assimilation=True, growth=True, dissipation=True):
-    select_fluxes = np.diag(np.array([assimilation, growth, dissipation], dtype=float))
+    select_fluxes = np.diag(np.array([assimilation, dissipation, growth], dtype=float))
     W_conv_factor = 1 + f * pet.omega
     L_i = np.power(W_i / W_conv_factor, 1 / 3)
     p_A = assimilation_power(pet, t, L_i=L_i, t0=t0, f=f)
-    p_G = growth_power(pet, t, L_i, t0=t0, f=f)
     p_D = dissipation_power(pet, t, L_i, t0=t0, f=f)
+    p_G = growth_power(pet, t, L_i, t0=t0, f=f)
     p = np.array([p_A, p_D, p_G])
     return pet.comp.N.w * pet.eta_M[3, :] @ select_fluxes @ p
 
 
 def heat_generation(pet: Pet, t, W_i, t0=0.0, f=1.0, assimilation=True, growth=True, dissipation=True):
-    select_fluxes = np.diag(np.array([assimilation, growth, dissipation], dtype=float))
+    select_fluxes = np.diag(np.array([assimilation, dissipation, growth], dtype=float))
     W_conv_factor = 1 + f * pet.omega
     L_i = np.power(W_i / W_conv_factor, 1 / 3)
     p_A = assimilation_power(pet, t, L_i=L_i, t0=t0, f=f)
-    p_G = growth_power(pet, t, L_i, t0=t0, f=f)
     p_D = dissipation_power(pet, t, L_i, t0=t0, f=f)
+    p_G = growth_power(pet, t, L_i, t0=t0, f=f)
     p = np.array([p_A, p_D, p_G])
     return -(pet.comp.mu_O @ pet.eta_O + pet.comp.mu_M @ pet.eta_M) @ select_fluxes @ p
