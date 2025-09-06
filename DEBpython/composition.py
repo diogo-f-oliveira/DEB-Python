@@ -84,12 +84,12 @@ class Compound:
     @classmethod
     def urea(cls):
         """Constructor for urea (CO(NH2)2)."""
-        return cls(n=(1, 4, 1, 2), d=0.1, mu=671_809, h=632_070, name='Urea', chemical_formula='CO(NH2)2')
+        return cls(n=(1, 4, 1, 2), d=0.1, mu=662_200, h=632_070, name='Urea', chemical_formula='CO(NH2)2')
 
     @classmethod
     def ammonia(cls):
         """Constructor for ammonia (NH3)."""
-        return cls(n=(0, 3, 0, 1), d=0.1, mu=339196, h=382_555, name='Ammonia', chemical_formula='NH3')
+        return cls(n=(0, 3, 0, 1), d=0.1, mu=339_250, h=382_555, name='Ammonia', chemical_formula='NH3')
 
     @classmethod
     def food(cls, n=(1, 1.8, 0.5, 0.15), d=0.3, mu=525_000, h=-117_300):
@@ -211,8 +211,8 @@ class Composition:
 
 
 class RuminantComposition(Composition):
-    def __init__(self, food=None, structure=None, reserve=None, feces=None):
-        super().__init__(n_waste='urea', food=food, structure=structure, reserve=reserve, feces=feces)
+    def __init__(self, n_waste='urea', food=None, structure=None, reserve=None, feces=None):
+        super().__init__(n_waste=n_waste, food=food, structure=structure, reserve=reserve, feces=feces)
         self.M = Compound.methane()
 
     @property
