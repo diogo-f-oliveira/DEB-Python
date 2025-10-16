@@ -1,7 +1,7 @@
-from .environment import Environment
+from .environment import Environment, ConstantEnvironment
 from .pet import Pet, Ruminant
 from .solution import TimeIntervalSol, TimeInstantSol
-from .state import ABJState
+from .state import ABJState, State
 
 from scipy.integrate import solve_ivp
 import numpy as np
@@ -26,15 +26,18 @@ class STD:
     def __init__(self, organism: Pet, env: Environment):
         """Takes as input a Pet class or a dictionary of parameters to create a Pet class."""
 
-        # Create the Pet class from the dictionary of parameters
-        if isinstance(organism, dict):
-            organism = Pet(**organism)
         # Check that organism is a Pet class
-        elif not isinstance(organism, Pet):
+        if not isinstance(organism, Pet):
             raise Exception("Input must be of class Pet or a dictionary of parameters used to create a Pet class.")
+        # Check that state is a State class
+        if not isinstance(organism.state, State):
+            raise Exception("Pet must have a state of type State to run this model.")
         self.filter_pet(organism)
         self.organism = organism
         self.state = organism.state
+        # self.lifestage_transitions = None
+        self.lifestage_transitions = None
+        self.set_lifestage_transitions()
 
         # Add env
         self.env = env
@@ -50,9 +53,15 @@ class STD:
         if not valid:
             raise Exception(f"Invalid Pet parameters. {reason}")
 
-    def simulate(self, t_span, step_size='auto', initial_state=None):
-        # TODO: Fix arguments
-        # TODO: Add events argument for solve_ivp
+    def set_lifestage_transitions(self):
+        self.lifestage_transitions = {
+            'fertilization': 0,
+            'birth': self.organism.E_Hb,
+            'puberty': self.organism.E_Hp,
+        }
+
+    def simulate(self, t_span, initial_state, step_size='auto', events=None) -> TimeIntervalSol:
+        # TODO: Update docstring
         """
         Integrates state equations over time. The output from the solver is stored in self.ode_sol.
 
@@ -90,32 +99,64 @@ class STD:
         #     initial_state = self.get_state_at_maturity(self.organism.E_Hp)
         #     initial_state[2] *= (1 + 1e-6)  # To ensure simulation starts at the next stage
         # elif len(initial_state) != len(self.organism.state.STATE_VARS):
-        #     # TODO: Call check_state_validity method of State class
         #     raise Exception(f"Invalid input {initial_state} for initial state. The initial state must be a list or "
         #                     f"tuple of length 4 with format (E, V, E_H, E_R) or a specified keyword.")
 
         if not isinstance(initial_state, type(self.organism.state)):
             raise Exception(f"Initial state must be of type {type(self.organism.state)}")
-
         # Integrate the state equations
         self.ode_sol = solve_ivp(self.state_changes, t_span, initial_state.state_values, t_eval=t_eval,
-                                 max_step=self.MAX_STEP_SIZE)
+                                 max_step=self.MAX_STEP_SIZE, events=events)
         self.sol = TimeIntervalSol(self, self.ode_sol)
         return self.sol
 
-    # TODO: Update function to work with Environment and State paradigm
-    def get_state_at_maturity(self, E_H):
-        event = lambda t, states: states[2] - E_H
-        event.terminal = True
-        embryo_state = (self.organism.E_0, self.organism.V_0, 0, 0)
-        self.food_function = lambda t: 1
-        ode_sol = solve_ivp(self.state_changes, (0, 1e6), embryo_state, max_step=self.MAX_STEP_SIZE, events=event)
-        if ode_sol.status != 1:
-            raise Exception(f"Simulation couldn't reach maturity level {E_H}.")
+    # def get_state_at_maturity_old(self, E_H):
+    #     event = lambda t, states: states[2] - E_H
+    #     event.terminal = True
+    #     embryo_state = (self.organism.E_0, self.organism.V_0, 0, 0)
+    #     self.food_function = lambda t: 1
+    #     ode_sol = solve_ivp(self.state_changes, (0, 1e6), embryo_state, max_step=self.MAX_STEP_SIZE, events=event)
+    #     if ode_sol.status != 1:
+    #         raise Exception(f"Simulation couldn't reach maturity level {E_H}.")
+    #
+    #     return ode_sol.y[:, -1]
 
-        return ode_sol.y[:, -1]
+    def get_state_at_maturity(self, E_H, initial_state=None, env=None):
+        original_state_values = self.state.state_values.copy()
+        if initial_state is None:
+            initial_state = self.state.__class__.at_fertilization(self.organism)
+        if env is None:
+            env = ConstantEnvironment(pet=self.organism, temp=self.organism.T_typical)
+        # Create event for reaching maturity
+        reach_maturity_event = lambda t, states: states[2] - E_H
+        reach_maturity_event.terminal = True
 
-    # TODO: Update function to work with Environment and State paradigm
+        # Create model for internal simulation
+        model = self.__class__(organism=self.organism, env=env)
+
+        # Simulate until event occurs
+        model.simulate(initial_state=initial_state, t_span=(0, 1e6), events=reach_maturity_event)
+        success = model.ode_sol.status == 1
+        state_at_maturity = model.sol[-1].state
+
+        # Reset organism state
+        self.state.set_state_vars(original_state_values)
+
+        return success, state_at_maturity
+
+    def get_state_at_lifestage_transition(self, transition: str, initial_state=None, env=None):
+        if transition not in self.lifestage_transitions:
+            raise Exception(f"Invalid lifestage transition: {transition}. Transition must be one of "
+                            f"{list(self.lifestage_transitions.keys())!r}")
+        success, state_at_transition = self.get_state_at_maturity(E_H=self.lifestage_transitions[transition],
+                                                                  initial_state=initial_state, env=env)
+        if not success:
+            raise Warning(f"Lifestage transition {transition} could not be reached.")
+        # Slightly increase the maturity to ensure transition has occurred
+        state_at_transition.E_H *= (1 + 1e-6)
+        return success, state_at_transition
+
+    # TODO: Update method to work with Environment and State paradigm
     def fully_grown(self, f=1, E_R=0):
         """
         Returns a TimeInstantSol of the organism at full growth for a given food level and reproduction buffer
@@ -341,11 +382,9 @@ class STX(STD):
         # Set initial reserve E_0
         setattr(organism, 'E_0', organism.E_density_mother * organism.V_0)
 
-    def simulate(self, t_span, food_function=1, step_size='auto', initial_state='embryo', transformation=None):
-        if initial_state == 'weaning':
-            initial_state = self.get_state_at_maturity(self.organism.E_Hx)
-            initial_state[2] *= (1 + 1e-6)  # To ensure simulation starts at the next stage
-        return super().simulate(t_span=t_span, step_size=step_size, initial_state=initial_state, )
+    def set_lifestage_transitions(self):
+        super().set_lifestage_transitions()
+        self.lifestage_transitions['weaning'] = self.organism.E_Hx
 
     def state_changes(self, t, state_vars):
         """
@@ -469,21 +508,10 @@ class RUM(STX):
     def __init__(self, organism: Ruminant, env: Environment):
         """Takes as input a Ruminant class or a dictionary of parameters to create a Pet class."""
 
-        # Create the Pet class from the dictionary of parameters
-        if isinstance(organism, dict):
-            organism = Ruminant(**organism)
-        # Check that organism is a Pet class
-        elif not isinstance(organism, Ruminant):
+       # Check that organism is a Ruminant class
+        if not isinstance(organism, Ruminant):
             raise Exception("Input must be of class Ruminant or a dictionary of parameters to create a Ruminant class.")
-        self.filter_pet(organism)
-        self.organism = organism
-        self.state = organism.state
-
-        # Add env
-        self.env = env
-
-        self.ode_sol = None  # Output from ODE solver
-        self.sol = None  # Full solution including powers, fluxes and entropy
+        super().__init__(organism=organism, env=env)
 
     def mineral_fluxes(self, p_A, p_D, p_G):
         """
@@ -527,20 +555,20 @@ class RUM(STX):
         powers = np.array([p_A, p_D, p_G])
         if self.state.E_H < self.organism.E_Hx:  # Use standard assimilation reaction
             return -(self.organism.comp.h_M[:-1] @ self.organism.gamma_M_CO2 + self.organism.comp.h_O @
-                     self.organism.gamma_O) @ powers / self.organism.T / self.organism.comp.E.mu
+                     self.organism.gamma_O) @ powers / self.state.T / self.organism.comp.E.mu
         else:  # Consider production of methane during rumination
             return -(self.organism.comp.h_M @ self.organism.gamma_M + self.organism.comp.h_O @ self.organism.gamma_O) \
-                @ powers / self.organism.T / self.organism.comp.E.mu
+                @ powers / self.state.T / self.organism.comp.E.mu
 
 
 class ABJ(STD):
     def __init__(self, organism: Pet, env: Environment):
-        super(ABJ, self).__init__(organism, env)
+        super().__init__(organism, env)
         if not isinstance(organism.state, ABJState):
             raise Exception("Pet must have a state of type ABJState to run this model.")
 
     def filter_pet(self, organism):
-        super(ABJ, self).filter_pet(organism)
+        super().filter_pet(organism)
 
         # Check that the Pet class has parameters E_Hj defined
         if not hasattr(organism, 'E_Hj'):
@@ -548,6 +576,10 @@ class ABJ(STD):
         elif organism.E_Hj <= organism.E_Hb or organism.E_Hj >= organism.E_Hp:
             raise Exception("The maturity at metamorphosis E_Hj must be larger than the maturity at birth and smaller "
                             "than maturity at puberty.")
+
+    def set_lifestage_transitions(self):
+        super().set_lifestage_transitions()
+        self.lifestage_transitions['metamorphosis'] = self.organism.E_Hj
 
     def state_changes(self, t, state_vars):
         """
