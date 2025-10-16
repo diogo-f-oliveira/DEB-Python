@@ -433,12 +433,87 @@ class TimeIntervalSol(MutableSequence):
         self._series_cache_keys.add(name)
         return out
 
-    def integrate(self, variable, t1=0, t2=-1):
-        if t2 > -1:
-            t2 += 1
-        elif t2 == -1:
-            t2 = self.__len__()
-        return -simpson(variable[t1:t2], self.t[t1:t2])
+    def integrate(self, variable, start=None, stop=None, *, method='simpson'):
+        """Integrate a time series over time.
+
+        Parameters
+        ----------
+        variable : str | array-like | callable
+            - If ``str``: name of an attribute on ``TimeInstantSol`` (auto-collected via ``__getattr__``).
+            - If array-like: samples aligned along time axis 0. Length must match the chosen sub-interval's ``t``.
+              (If you pass a full-length series but the sub-interval has interpolated endpoints, prefer using the
+              attribute name or a callable so values at new endpoints are evaluated consistently.)
+            - If callable: ``f(sol: TimeInstantSol) -> scalar | array`` evaluated at each time step of the
+              chosen sub-interval; results are stacked along a leading time axis.
+        start, stop : int | float | None
+            Bounds of the integration window. ``int`` is interpreted as **index** on the current grid.
+            ``float`` is interpreted as **time**; a sub-interval is built with interpolated endpoints.
+            ``None`` defaults to the beginning/end of the simulation.
+        method : {'simpson', 'trapz'}, default 'simpson'
+            Integration rule. Falls back to trapezoidal if there are fewer than 3 points.
+
+        Returns
+        -------
+        float or np.ndarray
+            Integral across time. If the series is vector/array-valued per time step, the integral is returned
+            element-wise with the same trailing shape.
+        """
+        # ---- Select sub-interval ------------------------------------------
+        sub = self
+        if start is not None or stop is not None:
+            # interpret both as indices or both as times; mixing types is ambiguous
+            if (isinstance(start, (int, np.integer)) or start is None) and (
+                    isinstance(stop, (int, np.integer)) or stop is None):
+                sub = self[slice(start, stop)]
+            elif (isinstance(start, (float, np.floating)) or start is None) and (
+                    isinstance(stop, (float, np.floating)) or stop is None):
+                # time-based window with interpolated endpoints
+                s = float(start) if start is not None else float(self.t[0])
+                e = float(stop) if stop is not None else float(self.t[-1])
+                sub = self.window(s, e, include_end=True)
+            else:
+                raise TypeError("start/stop must both be indices (int) or both be times (float), or None.")
+
+        # ---- Build the series on the chosen sub-interval -------------------
+        y = self._coerce_series_argument(variable, sub)
+
+        # y must have time on axis 0
+        y = np.asarray(y)
+        if y.shape[0] != len(sub.t):
+            raise ValueError(
+                f"Series length {y.shape[0]} does not match sub-interval time grid length {len(sub.t)}. "
+                "Pass an attribute name or callable to evaluate on the sub-interval, or resample accordingly."
+            )
+
+        # ---- Integrate ------------------------------------------------------
+        if method == 'simpson' and len(sub.t) >= 3:
+            res = simpson(y, sub.t, axis=0)
+        elif method in ('simpson', 'trapz'):
+            res = np.trapz(y, sub.t, axis=0)
+        else:
+            raise ValueError("method must be 'simpson' or 'trapz'.")
+
+        return res
+
+    #TODO: cumulative integration method. Check implementation by ChatGPT
+
+    @staticmethod
+    def _coerce_series_argument(variable, sub):
+        """Return a series array aligned with ``sub.t`` for integration.
+
+        - If ``variable`` is a string, fetches ``getattr(sub, variable)``.
+        - If ``callable``, evaluates on each ``TimeInstantSol`` in the sub-interval and stacks along axis 0.
+        - Otherwise returns ``np.asarray(variable)`` as-is.
+        """
+        if isinstance(variable, str):
+            return getattr(sub, variable)
+        if callable(variable):
+            vals = [variable(sol) for sol in sub.time_instant_sols]
+            a0 = np.asarray(vals[0])
+            if a0.ndim == 0:
+                return np.asarray(vals)
+            return np.stack([np.asarray(v) for v in vals], axis=0)
+        return np.asarray(variable)
 
     # TODO: Create a class based on TimeIntervalSol that implements the following methods
     # def total_feed_intake(self, t1=0, t2=-1):
