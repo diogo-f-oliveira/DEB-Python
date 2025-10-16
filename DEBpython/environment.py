@@ -2,6 +2,7 @@ from .pet import Pet
 from .composition import Compound
 import numpy as np
 
+T_REF = 293
 
 class Environment:
     def __init__(self, pet: Pet, food_function, temp_function, food_comp_function):
@@ -25,13 +26,17 @@ class Environment:
     def apply_food_comp(self):
         self.state.food_comp = self.food_comp_function(self.state.t, self.pet)
 
-
 class ConstantEnvironment(Environment):
-    def __init__(self, pet: Pet, f=1, food_comp=None, temp=293):
+    def __init__(self, pet: Pet, f=1, food_comp=None, temp=None):
         self.f = f
         if food_comp is None:
             food_comp = Compound.food()
         self.food_comp = food_comp
+        if temp is None:
+            if hasattr(pet, 'T_typical'):
+                temp = pet.T_typical
+            else:
+                temp = T_REF
         self.temp = temp
         super().__init__(pet=pet,
                          food_function=self.constant_food,
@@ -49,7 +54,7 @@ class ConstantEnvironment(Environment):
 
 
 class SinusoidalTemperatureEnvironment(Environment):
-    def __init__(self, pet: Pet, f=1, food_comp=None, T_max=293, T_min=293, T_init=293, period=365):
+    def __init__(self, pet: Pet, f=1, food_comp=None, T_max=T_REF, T_min=T_REF, T_init=T_REF, period=365):
         # Food parameters
         self.f = f
         if food_comp is None:
