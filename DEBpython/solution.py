@@ -355,16 +355,60 @@ class TimeIntervalSol(MutableSequence):
     def insert(self, index: int, value) -> None:
         return
 
-    # TODO: See if adding attributes to self.__dict__ helps in any way
-    def __getattr__(self, item):
-        tsol = self.time_instant_sols[-1]
-        if hasattr(tsol, item):
-            if isinstance(getattr(tsol, item), np.ndarray):
-                return np.concatenate([getattr(sol, item) for sol in self.time_instant_sols], axis=1)
+    # Auto-timeseries accessor: fetch any attribute defined on TimeInstantSol across all time steps.
+    def __getattr__(self, name):
+        """Return the time series for an attribute defined on ``TimeInstantSol``.
+
+        Examples
+        --------
+        If each ``TimeInstantSol`` has a scalar ``wet_weight`` (float), ``interval.wet_weight``
+        returns a 1D array of shape (T,), where T is the number of time steps.
+
+        If an attribute is a vector (shape (K,)), the result is stacked with time on axis 0:
+        shape (T, K).
+
+        For higher-dimensional arrays, values are stacked along a new leading time axis:
+        shape (T, ...).
+
+        The computed series is cached on the instance under the same name to avoid recomputation.
+        """
+        # Only invoked if normal attribute lookup fails; avoid recursion by using __dict__ directly
+        if not self.time_instant_sols:
+            raise AttributeError(name)
+
+        sample = self.time_instant_sols[0]
+        if not hasattr(sample, name):
+            raise AttributeError(f"{type(self).__name__} has no attribute '{name}', "
+                                 f"and it is not present on TimeInstantSol.")
+
+        # Ignore callables (methods/properties that return callables)
+        v0 = getattr(sample, name)
+        if callable(v0):
+            raise AttributeError(f"Attribute '{name}' on TimeInstantSol is callable; not a data series.")
+
+        # Gather values from all time instants
+        values = []
+        for sol in self.time_instant_sols:
+            if not hasattr(sol, name):
+                raise AttributeError(f"Not all TimeInstantSol instances define attribute '{name}'. "
+                                     f"Cannot build a consistent time series."                )
+            values.append(getattr(sol, name))
+
+        a0 = np.asarray(values[0])
+        try:
+            if a0.ndim == 0:
+                # Scalar per time -> (T,)
+                out = np.asarray(values)
             else:
-                return np.array([getattr(sol, item) for sol in self.time_instant_sols])
-        else:
-            raise AttributeError
+                # Vector/array per time -> stack with time as the first axis -> (T, ...)
+                out = np.stack([np.asarray(v) for v in values], axis=0)
+        except Exception:
+            # Inconsistent shapes -> fall back to object array to avoid silent shape errors
+            out = np.array(values, dtype=object)
+
+        # Cache result for subsequent accesses
+        self.__dict__[name] = out
+        return out
 
     def integrate(self, variable, t1=0, t2=-1):
         if t2 > -1:
