@@ -39,8 +39,9 @@ class Pet:
         self.E_Hb = E_Hb  # Maturity at birth (J)
         self.E_Hp = E_Hp  # Maturity at puberty (J)
         self.kap_R = kap_R  # Reproduction efficiency (-)
-        self.E_0 = E_0  # Initial Reserve (J)
-        self.V_0 = V_0  # Initial Structure (cm^3)
+        # TODO: Make E_0 a method that takes as input the reserve density of the mother
+        self.E_0 = float(E_0)  # Initial Reserve (J)
+        self.V_0 = float(V_0)  # Initial Structure (cm^3)
         self.kap_X = kap_X  # Digestion efficiency (-)
         self.kap_P = kap_P  # Defecation efficiency (-)
         self.T_A = T_A  # Arrhenius temperature (K)
@@ -447,34 +448,35 @@ class Ruminant(Pet):
 # Dictionary with parameters for several common organisms. Usage with Pet class is: Pet(**animals[pet_name])
 animals = {
     'shark': dict(E_G=5212.32, p_Am=558.824, v=0.02774, p_M=34.3632, kap=0.84851, k_J=0.002, kap_R=0.95, E_Hb=7096,
-                  E_Hp=300600, E_0=174_619, T_typical=282.15),
+                  E_Hp=300600, E_0=174_619, T_typical=282.15,
+                  comp=Composition.standard(n_waste='ammonia', d=0.2)),
     'muskox': dict(E_G=7842.44, p_Am=1053.62, v=0.13958, p_M=18.4042, kap=0.82731, k_J=0.00087827, kap_R=0.95,
                    E_Hb=1.409e+7, E_Hp=3.675e+8, E_Hx=5.136e+7, t_0=18.2498, f_milk=1, T_typical=310.85),
     'human': dict(E_G=7879.55, p_Am=118.992, v=0.031461, p_M=2.5826, kap=0.78656, k_J=0.00026254, kap_R=0.95,
                   E_Hb=4.81e+6, E_Hp=8.726e+7, E_Hx=1.346e+7, t_0=26.8217, f_milk=1),
     'bos_taurus_alentejana': dict(E_G=8261.79, p_Am=2501.03, v=0.107224, p_M=42.2556, kap=0.976264, k_J=0.002,
                                   kap_R=0.95, E_Hb=2071229.972, E_Hp=30724119.81, E_Hx=15139260.45, t_0=109.4715964,
-                                  f_milk=1, del_M=0.349222, kap_X=0.3, rum_fraction=0.3, T_typical=311.75),
+                                  f_milk=1, del_M=0.349222, kap_X=0.3, xi_C=0.3, T_typical=311.75),
     'bos_taurus_angus': dict(E_G=7960, p_Am=1584.86, v=0.08859, p_M=21.81, kap=0.9633,
                              k_J=0.002, kap_R=0.95, E_Hb=4.335e+06, E_Hp=2.608e+07, E_Hx=2.083e+07,
-                             t_0=84.66, f_milk=1, del_M=0.4481, kap_X=0.09051, rum_fraction=0.3, T_typical=311.75),
+                             t_0=84.66, f_milk=1, del_M=0.4481, kap_X=0.09051, xi_C=0.3, T_typical=311.75),
     'bos_taurus_limousin': dict(E_G=8839.515768, p_Am=4927.102094, v=0.167427252, p_M=88.18065702, kap=0.9783141238,
                                 k_J=0.002, kap_R=0.95, E_Hb=2234700.015, E_Hp=91160096.48, E_Hx=34941987.33,
-                                t_0=188.2442861, f_milk=1, del_M=0.3686000612, kap_X=0.3, rum_fraction=0.3,
+                                t_0=188.2442861, f_milk=1, del_M=0.3686000612, kap_X=0.3, xi_C=0.3,
                                 T_typical=311.75),
     'bos_taurus_charolais': dict(E_G=8885.233383, p_Am=4583.16235, v=0.06126486348, p_M=96.28243777, kap=0.9771477494,
                                  k_J=0.002, kap_R=0.95, E_Hb=2031342.633, E_Hp=26960202.1, E_Hx=17219252.94,
-                                 t_0=88.84268928, f_milk=1, del_M=0.2688914292, kap_X=0.3, rum_fraction=0.3,
+                                 t_0=88.84268928, f_milk=1, del_M=0.2688914292, kap_X=0.3, xi_C=0.3,
                                  T_typical=311.75),
     'bos_taurus_mertolenga': dict(E_G=8880, p_Am=1787, v=0.2361, p_M=24.16, kap=0.9528, k_J=0.002, kap_R=0.95,
                                   E_Hb=5.948e+06, E_Hp=1.467e+08, E_Hx=4.451e+07, t_0=229, f_milk=1, del_M=0.4,
-                                  kap_X=0.1815, rum_fraction=0.3, T_typical=311.75),
+                                  kap_X=0.1815, xi_C=0.3, T_typical=311.75),
     'sheep': dict(E_G=7838.53, p_Am=3473.31, v=0.18751, p_M=96.0278, kap=0.82933, k_J=0.002, kap_R=0.95,
                   E_Hb=4.154e+06, E_Hp=2.397e+08, E_Hx=6.797e+07, t_0=80.9564, f_milk=1, del_M=0.2688914292, kap_X=0.8,
-                  rum_fraction=0.3, T_typical=311.75),
+                  xi_C=0.3, T_typical=311.75),
     'ovis_aries_lacaune': dict(E_G=7828, p_Am=2289.55, v=1.845, p_M=57.54, kap=0.955, k_J=0.002, kap_R=0.95,
                                E_Hb=1.656e+06, E_Hp=6.298e+07, E_Hx=6.345e+06, t_0=126.5, f_milk=1, del_M=0.2688914292,
-                               kap_X=0.8, rum_fraction=0.3, T_typical=311.75),
+                               kap_X=0.8, xi_C=0.3, T_typical=311.75),
     'Danio_rerio': dict(E_G=5267.41, p_Am=150.724, v=0.0196, p_M=243.001, kap=0.35756, k_J=0.002, kap_R=0.95,
                         E_Hb=0.7925, E_Hj=37.26, E_Hp=2361, E_0=1.81032, T_typical=273.15, del_M=0.14246,
                         comp=Composition.standard(n_waste='ammonia', d=0.2)),

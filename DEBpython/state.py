@@ -79,6 +79,30 @@ class State:
                 return valid, reason
         return True, ''
 
+    @classmethod
+    def from_state_values(cls, state_values):
+        state = cls()
+        state.set_state_vars(state_values)
+        return state
+
+    @classmethod
+    def from_environment_values(cls, env_state_values):
+        state = cls()
+        state.set_environment_state(env_state_values)
+        return state
+
+    @classmethod
+    def from_state_and_environment_values(cls, state_values, env_state_values):
+        state = cls.from_environment_values(env_state_values)
+        state.set_state_vars(state_values)
+        return state
+
+    @classmethod
+    def at_fertilization(cls, organism):
+        return cls.from_state_values((organism.E_0, organism.V_0, 0., 0.))
+
+
+
 
 class ABJState(State):
     STATE_VARS = {
@@ -93,3 +117,6 @@ class ABJState(State):
         'p_X': float,
         'food_comp': Compound.food,
     }
+    @classmethod
+    def at_fertilization(cls, organism):
+        return cls.from_state_values((organism.E_0, organism.V_0, 0., 0., 1.))
