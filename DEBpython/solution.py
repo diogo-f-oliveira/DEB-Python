@@ -83,11 +83,14 @@ class TimeIntervalSol(MutableSequence):
         self.t = ode_sol.t
         # self._time_to_index = {self.t[i]: i for i in range(len(self.t))}
 
+        # TODO: Check if this is needed. Is __getattr__ enough?
         for i, state_var in enumerate(model.organism.state.STATE_VARS):
             setattr(self, state_var, ode_sol.y[i, :])
         # self.E, self.V, self.E_H, self.E_R = ode_sol.y
 
         self.time_instant_sols = [TimeInstantSol(self.model, self.t[i], ode_sol.y[:, i]) for i in range(len(self.t))]
+        # Setup cache for time-series of attributes
+        self._series_cache_keys = set()
 
         # TODO: create attributes for each of the stage transitions
         self.time_of_birth = None
@@ -343,17 +346,36 @@ class TimeIntervalSol(MutableSequence):
 
     def __setitem__(self, key, value):
         # TODO: Add a time step in the correct place
+        self._clear_series_cache()
         return
 
     def __delitem__(self, key):
         # TODO: Delete a time step
+        self._clear_series_cache()
         return
 
     def __len__(self):
         return len(self.t)
 
     def insert(self, index: int, value) -> None:
+        self._clear_series_cache()
         return
+
+    def _clear_series_cache(self, names=None):
+        """Clear memoized time-series stored on the instance by ``__getattr__``.
+
+        If ``names`` is None, clears all cached series. Otherwise, accepts a string or an iterable of names to remove.
+        """
+        if names is None:
+            for k in list(self._series_cache_keys):
+                self.__dict__.pop(k, None)
+            self._series_cache_keys.clear()
+            return
+        if isinstance(names, str):
+            names = [names]
+        for k in names:
+            self.__dict__.pop(k, None)
+            self._series_cache_keys.discard(k)
 
     # Auto-timeseries accessor: fetch any attribute defined on TimeInstantSol across all time steps.
     def __getattr__(self, name):
@@ -391,7 +413,7 @@ class TimeIntervalSol(MutableSequence):
         for sol in self.time_instant_sols:
             if not hasattr(sol, name):
                 raise AttributeError(f"Not all TimeInstantSol instances define attribute '{name}'. "
-                                     f"Cannot build a consistent time series."                )
+                                     f"Cannot build a consistent time series.")
             values.append(getattr(sol, name))
 
         a0 = np.asarray(values[0])
@@ -408,6 +430,7 @@ class TimeIntervalSol(MutableSequence):
 
         # Cache result for subsequent accesses
         self.__dict__[name] = out
+        self._series_cache_keys.add(name)
         return out
 
     def integrate(self, variable, t1=0, t2=-1):
