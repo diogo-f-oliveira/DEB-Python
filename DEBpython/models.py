@@ -88,20 +88,7 @@ class STD:
         else:
             raise Exception(f"Invalid step size value: {step_size}. Please select 'auto' for automatic step size during"
                             f" integration or input a fixed step size.")
-
-        # # Get initial state
-        # if initial_state == 'embryo':
-        #     initial_state = (self.organism.E_0, self.organism.V_0, 0, 0)
-        # elif initial_state == 'birth':
-        #     initial_state = self.get_state_at_maturity(self.organism.E_Hb)
-        #     initial_state[2] *= (1 + 1e-6)  # To ensure simulation starts at the next stage
-        # elif initial_state == 'puberty':
-        #     initial_state = self.get_state_at_maturity(self.organism.E_Hp)
-        #     initial_state[2] *= (1 + 1e-6)  # To ensure simulation starts at the next stage
-        # elif len(initial_state) != len(self.organism.state.STATE_VARS):
-        #     raise Exception(f"Invalid input {initial_state} for initial state. The initial state must be a list or "
-        #                     f"tuple of length 4 with format (E, V, E_H, E_R) or a specified keyword.")
-
+        # TODO: Add initial state options for life stage transitions
         if not isinstance(initial_state, type(self.organism.state)):
             raise Exception(f"Initial state must be of type {type(self.organism.state)}")
         # Integrate the state equations
@@ -109,17 +96,6 @@ class STD:
                                  max_step=self.MAX_STEP_SIZE, events=events)
         self.sol = TimeIntervalSol(self, self.ode_sol)
         return self.sol
-
-    # def get_state_at_maturity_old(self, E_H):
-    #     event = lambda t, states: states[2] - E_H
-    #     event.terminal = True
-    #     embryo_state = (self.organism.E_0, self.organism.V_0, 0, 0)
-    #     self.food_function = lambda t: 1
-    #     ode_sol = solve_ivp(self.state_changes, (0, 1e6), embryo_state, max_step=self.MAX_STEP_SIZE, events=event)
-    #     if ode_sol.status != 1:
-    #         raise Exception(f"Simulation couldn't reach maturity level {E_H}.")
-    #
-    #     return ode_sol.y[:, -1]
 
     def get_state_at_maturity(self, E_H, initial_state=None, env=None):
         original_state_values = self.state.state_values.copy()
@@ -244,7 +220,7 @@ class STD:
         """
         E, V = self.state.E, self.state.V
         return (E / V) * (self.organism.E_G * self.organism.v * (V ** (2 / 3)) + p_S) / \
-            (self.organism.kap + self.organism.E_G * V / E)
+            (self.organism.kap * (E / V) + self.organism.E_G)
 
     def p_S(self):
         """
@@ -427,6 +403,7 @@ class STX(STD):
 
         return dE, dV, dE_H, dE_R
 
+    # TODO: Check if all powers are equal to 0 before gestation starts (during diapause, t < t_0)
     def compute_powers(self, compute_dissipation_power=False):
         """
         Computes all powers, with the option of also calculating the dissipation power p_D
@@ -476,8 +453,6 @@ class STX(STD):
 
         :param p_C: Scalar or array of mobilization power values
         :param p_S: Scalar or array of somatic maintenance power values
-        :param V: Scalar or array of Structure values
-        :param E_H: Scalar or array of Maturity values
         :return: Scalar or array of growth power p_G values
         """
 
@@ -494,7 +469,6 @@ class STX(STD):
         :param p_J: Scalar or array of maturity maintenance power values
         :param p_S: Scalar or array of somatic maintenance values
         :param p_G: Scalar or array of growth power values
-        :param E_H: Scalar or array of Maturity values
         :return: Scalar or array of reproduction power p_R values
         """
 
@@ -517,7 +491,7 @@ class RUM(STX):
         """
         Computes the mineral fluxes using the basic organic powers. Until weaning, the organism does not ruminate and
         therefore the standard assimilation equation applies. Afterwards, both sub transformations occur. The mineral
-        fluxes are in following format (CO2, H2O, O2, N-Waste, CH4). Units are mol/d.
+        fluxes are in format (CO2, H2O, O2, N-Waste, CH4). Units are mol/d.
         :param p_A: scalar of assimilation power
         :param p_D: scalar of dissipation power
         :param p_G: scalar of growth power
