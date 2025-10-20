@@ -24,8 +24,8 @@ class Pet:
     """
     temperature_affected = ('p_Am', 'v', 'p_M', 'p_T', 'k_J')
     T_REF = 293.15  # Reference temperature (K)
-
-    def __init__(self, p_Am, kap, v, p_M, E_G, k_J, E_Hb, E_Hp, kap_R, state=None, comp=None, p_T=0, kap_X=0.8,
+    # TODO: Set generalized animal parameter values as defaults
+    def __init__(self, *, p_Am, kap, v, p_M, E_G, k_J, E_Hb, E_Hp, kap_R, state=None, comp=None, p_T=0, kap_X=0.8,
                  kap_P=0.1, T_typical=T_REF, E_0=1e6, V_0=1e-10, T_A=8000, del_M=1, **additional_parameters):
 
         # Parameters
@@ -117,7 +117,7 @@ class Pet:
     def physical_length(self):
         return self.state.V ** (1 / 3) / self.del_M
 
-    def compute_physical_volume(self, V, E, E_R):
+    def compute_physical_volume(self, V, E, E_R=0):
         """
         Converts structure, reserve and reproduction buffer into physical volume.
         :param V: scalar or vector of structure
@@ -130,9 +130,9 @@ class Pet:
     @property
     def physical_volume(self):
         E, V, E_R = self.state.E, self.state.V, self.state.E_R
-        return V + (E + E_R) * self.comp.E.w / self.comp.E.d / self.comp.E.mu
+        return V + E * self.comp.E.w / self.comp.E.d / self.comp.E.mu
 
-    def compute_wet_weight(self, V, E, E_R):
+    def compute_wet_weight(self, V, E, E_R=0):
         """
         Converts structure, reserve and reproduction buffer into wet weight_col. Assumes density of reserve d_V equal to 1
         :param V: scalar or vector of structure
@@ -140,18 +140,14 @@ class Pet:
         :param E_R: scalar or vector of reproduction buffer
         :return: scalar or vector of wet weight_col
         """
-        # TODO: Compute wet weight with reproduction buffer (check DEB comments)
-        # TODO: Check assumption of d_V = 1, seems like it is wet density of structure
-        scaled_reserved_density = (E / V) / self.E_m
-        return V * (1 + scaled_reserved_density * self.omega)
+        return 1 * V + (E + E_R) * self.comp.E.w / self.comp.E.mu / self.comp.E.d
 
     @property
     def wet_weight(self):
-        E, V, E_R = self.state.E, self.state.V, self.state.E_R
-        scaled_reserved_density = (E / V) / self.E_m
-        return V * (1 + scaled_reserved_density * self.omega)
+        E, V = self.state.E, self.state.V
+        return 1 * V + E * self.comp.E.w / self.comp.E.mu / self.comp.E.d
 
-    def compute_dry_weight(self, V, E, E_R):
+    def compute_dry_weight(self, V, E, E_R=0):
         """
         Converts structure, reserve and reproduction buffer into dry_weight.
         :param V: scalar or vector of structure
@@ -163,8 +159,8 @@ class Pet:
 
     @property
     def dry_weight(self):
-        E, V, E_R = self.state.E, self.state.V, self.state.E_R
-        return 1 * V + (E + E_R) * self.comp.E.w / self.comp.E.mu
+        E, V = self.state.E, self.state.V
+        return 1 * V + E * self.comp.E.w / self.comp.E.mu
 
     def __getattr__(self, item):
         """Returns the value of temperature affected parameters corrected with the temperature correction factor TC.
@@ -371,12 +367,13 @@ class Ruminant(Pet):
         assimilation reaction is an average of both sub transformations, weighted by the parameter xi_C.
         """
 
-    def __init__(self, p_Am, kap, v, p_M, E_G, k_J, E_Hb, E_Hp, kap_R, xi_C, comp=None, p_T=0, kap_X=0.8,
-                 kap_P=0.1, E_0=1e6, V_0=1e-12, T_A=8000, T_ref=293.15, T_typical=298.15, del_M=1,
+    def __init__(self, *, p_Am, kap, v, p_M, E_G, k_J, E_Hb, E_Hp, kap_R, xi_C, comp=None, p_T=0, kap_X=0.8,
+                 kap_P=0.1, E_0=1e6, V_0=1e-10, T_A=8000, T_ref=293.15, T_typical=298.15, del_M=1,
                  **additional_parameters):
 
-        super().__init__(p_Am, kap, v, p_M, E_G, k_J, E_Hb, E_Hp, kap_R, comp=comp, p_T=p_T, kap_X=kap_X, kap_P=kap_P,
-                         E_0=E_0, V_0=V_0, T_A=T_A, T_ref=T_ref, T_typical=T_typical, del_M=del_M,
+        super().__init__(p_Am=p_Am, kap=kap, v=v, p_M=p_M, E_G=E_G, k_J=k_J, E_Hb=E_Hb, E_Hp=E_Hp, kap_R=kap_R,
+                         comp=comp, p_T=p_T, kap_X=kap_X, kap_P=kap_P, E_0=E_0, V_0=V_0, T_A=T_A, T_ref=T_ref,
+                         T_typical=T_typical, del_M=del_M,
                          **additional_parameters)
         # Chemical composition
         if comp is None:
