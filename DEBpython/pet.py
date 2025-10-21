@@ -248,7 +248,7 @@ class Pet:
     @property
     def k(self):
         """Maintenance ratio (-)."""
-        return self._k_J / self._k_M
+        return self.k_J / self.k_M
 
     @property
     def L_m(self):
@@ -393,6 +393,7 @@ class Ruminant(Pet):
     def gamma_M(self):
         """Computes the matrix of stoichiometry coefficients for mineral compounds in the assimilation, dissipation and
         growth aggregated chemical reactions."""
+        # TODO: See if there is a faster way to build this, seems to be a performance bottleneck
         gamma_M = np.pad(self.gamma_M_CO2, ((0, 1), (0, 0)))
         gamma_M[:, 0] = gamma_M[:, 0] * (1 - self.xi_C) + \
                         np.pad(self.gamma_M_CH4[:, 0], (1, 0)) * self.xi_C
