@@ -94,7 +94,7 @@ class STD:
         # Integrate the state equations
         self.ode_sol = solve_ivp(self.state_changes, t_span, initial_state.state_values, t_eval=t_eval,
                                  max_step=self.MAX_STEP_SIZE, events=events)
-        self.sol = TimeIntervalSol(self, self.ode_sol)
+        self.sol = TimeIntervalSol.from_ode(self, self.ode_sol)
         return self.sol
 
     def get_state_at_maturity(self, E_H, initial_state=None, env=None):
@@ -111,9 +111,9 @@ class STD:
         model = self.__class__(organism=self.organism, env=env)
 
         # Simulate until event occurs
-        model.simulate(initial_state=initial_state, t_span=(0, 1e6), events=reach_maturity_event)
+        sol = model.simulate(initial_state=initial_state, t_span=(0, 1e6), events=reach_maturity_event)
         success = model.ode_sol.status == 1
-        state_at_maturity = model.sol[-1].state
+        state_at_maturity = sol[-1].state
 
         # Reset organism state
         self.state.set_state_vars(original_state_values)
@@ -167,7 +167,6 @@ class STD:
 
         # Compute powers
         p_A, p_C, p_S, p_G, p_J, p_R = self.compute_powers()
-
         # Changes to state variables
         dE = p_A - p_C
         dV = p_G / self.organism.E_G
@@ -482,7 +481,7 @@ class RUM(STX):
     def __init__(self, organism: Ruminant, env: Environment):
         """Takes as input a Ruminant class or a dictionary of parameters to create a Pet class."""
 
-       # Check that organism is a Ruminant class
+        # Check that organism is a Ruminant class
         if not isinstance(organism, Ruminant):
             raise Exception("Input must be of class Ruminant or a dictionary of parameters to create a Ruminant class.")
         super().__init__(organism=organism, env=env)
@@ -490,7 +489,7 @@ class RUM(STX):
     def mineral_fluxes(self, p_A, p_D, p_G):
         """
         Computes the mineral fluxes using the basic organic powers. Until weaning, the organism does not ruminate and
-        therefore the standard assimilation equation applies. Afterwards, both sub transformations occur. The mineral
+        therefore the standard assimilation equation applies. Afterward, both sub transformations occur. The mineral
         fluxes are in format (CO2, H2O, O2, N-Waste, CH4). Units are mol/d.
         :param p_A: scalar of assimilation power
         :param p_D: scalar of dissipation power
@@ -557,12 +556,12 @@ class ABJ(STD):
 
     def state_changes(self, t, state_vars):
         """
-               Computes the derivatives of the state variables according to the standard DEB model equations. Function used in
-               the integration solver.
-               :param t: time
-               :param state_vars: tuple of state variables (E, V, E_H, E_R)
-               :return: derivatives of the state variables (dE, dV, dE_H, dE_R)
-               """
+       Computes the derivatives of the state variables according to the standard DEB model equations. Function used in
+       the integration solver.
+       :param t: time
+       :param state_vars: tuple of state variables (E, V, E_H, E_R, s_Hbj)
+       :return: derivatives of the state variables (dE, dV, dE_H, dE_R, ds_Hbj)
+       """
         # Setting state variables in State class
         self.state.t = t
         self.state.set_state_vars(state_vars)

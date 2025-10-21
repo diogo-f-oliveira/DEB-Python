@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 from scipy.integrate import simpson
+from typing import List
 
 from DEBpython.state import State
 
@@ -30,6 +31,8 @@ class TimeInstantSol:
         model.organism.state.t = t
         model.env.update()
         self.state = deepcopy(model.organism.state)
+        for i, state_var in enumerate(self.state.STATE_VARS):
+            setattr(self, state_var, getattr(self.state, state_var))
 
         # Powers
         powers = model.compute_powers(compute_dissipation_power=True)
@@ -73,30 +76,36 @@ class TimeIntervalSol(MutableSequence):
     """
     _TIME_TOL = 1e-10
 
-    def __init__(self, model, ode_sol):
+    def __init__(self, model, instants: List[TimeInstantSol]):
         """
         Creates an instance of TimeIntervalSol from a model containing a simulation of the organism.
         :param model: model class
         """
         self.model = model
-
-        self.t = ode_sol.t
-        # self._time_to_index = {self.t[i]: i for i in range(len(self.t))}
-
-        # TODO: Check if this is needed. Is __getattr__ enough?
-        for i, state_var in enumerate(model.organism.state.STATE_VARS):
-            setattr(self, state_var, ode_sol.y[i, :])
-        # self.E, self.V, self.E_H, self.E_R = ode_sol.y
-
-        self.time_instant_sols = [TimeInstantSol(self.model, self.t[i], ode_sol.y[:, i]) for i in range(len(self.t))]
+        self.organism = model.organism  # Pointer to Pet class
         # Setup cache for time-series of attributes
         self._series_cache_keys = set()
 
+        # Ensure instants are sorted by time (stable) and assign
+        if len(instants) > 1 and any(instants[i].t > instants[i + 1].t for i in range(len(instants) - 1)):
+            instants = sorted(instants, key=lambda s: s.t)
+        self.time_instant_sols = list(instants)
+
         # TODO: create attributes for each of the stage transitions
-        self.time_of_birth = None
-        self.time_of_weaning = None
-        self.time_of_puberty = None
-        self.calculate_stage_transitions()
+        # self.time_of_birth = None
+        # self.time_of_weaning = None
+        # self.time_of_puberty = None
+        # self.calculate_stage_transitions()
+
+    @classmethod
+    def from_ode(cls, model, ode_sol):
+        """Constructor for ODE-like solutions with attributes .t and .y.
+        Builds the list of TimeInstantSol once, then delegates to the main constructor.
+        """
+        t = np.asarray(ode_sol.t, dtype=float)
+        y = np.asarray(ode_sol.y, dtype=float)
+        instants = [TimeInstantSol(model, float(t[i]), y[:, i]) for i in range(t.size)]
+        return cls(model, instants)
 
     def calculate_stage_transitions(self):
         """Calculates the time step of life stage transitions."""
@@ -290,48 +299,8 @@ class TimeIntervalSol(MutableSequence):
 
         # Build list of TimeInstantSol objects at requested times (reuse existing or interpolate)
         instants = [self.at_time(float(t)) for t in times]
+        return TimeIntervalSol(self.model, instants)
 
-        # Assemble state matrix y with shape (n_state_vars, n_times)
-        n_state = len(self.model.organism.state.STATE_VARS)
-        y = np.empty((n_state, len(instants)), dtype=float)
-        for j, sol in enumerate(instants):
-            y[:, j] = sol.state.state_values
-
-        ode_like = SimpleNamespace(t=np.asarray(times, dtype=float), y=y)
-        return TimeIntervalSol(self.model, ode_like)
-
-    # def __getitem__(self, time_step):
-    #     # TODO: Check for time steps outside of simulation time
-    #     # TODO: Case for slice of time steps
-    #     if isinstance(time_step, int):
-    #         return self.time_instant_sols[time_step]
-    #     elif isinstance(time_step, (float, np.float64)):
-    #         if time_step in self._time_to_index:
-    #             return self.time_instant_sols[self._time_to_index[time_step]]
-    #         # Interpolate if time_step doesn't exist
-    #         else:
-    #             ti2 = self.find_closest_time_step(time_step)
-    #             # TODO: Check if ti2 is at the beginning of the simulation
-    #             ti1 = ti2 - 1
-    #             sol1 = self.time_instant_sols[ti1]
-    #             sol2 = self.time_instant_sols[ti2]
-    #             interpolated_state = self.linear_interpolation(t=time_step,
-    #                                                            t1=sol1.t, state1=sol1.state.state_values,
-    #                                                            t2=sol2.t, state2=sol2.state.state_values)
-    #             # t1, t2 = sol1.t, sol2.t
-    #             # st1 = np.array([sol1.E, sol1.V, sol1.E_H, sol1.E_R])
-    #             # st2 = np.array([sol2.E, sol2.V, sol2.E_H, sol2.E_R])
-    #             #
-    #             # state = (st2 - st1) / (t2 - t1) * (time_step - t1) + st1
-    #             return TimeInstantSol(self.model, time_step, interpolated_state)
-    #
-    # def find_closest_time_step(self, time_step):
-    #     for i, t in enumerate(self.t):
-    #         if t > time_step:
-    #             t_i = i
-    #             break
-    #     return t_i
-    #
     @staticmethod
     def find_closest_value(variable, value):
         for i, v in enumerate(variable):
@@ -487,7 +456,7 @@ class TimeIntervalSol(MutableSequence):
 
         # ---- Integrate ------------------------------------------------------
         if method == 'simpson' and len(sub.t) >= 3:
-            res = simpson(y, sub.t, axis=0)
+            res = simpson(y=y, x=sub.t, axis=0)
         elif method in ('simpson', 'trapz'):
             res = np.trapz(y, sub.t, axis=0)
         else:
@@ -495,7 +464,7 @@ class TimeIntervalSol(MutableSequence):
 
         return res
 
-    #TODO: cumulative integration method. Check implementation by ChatGPT
+    # TODO: cumulative integration method. Check implementation by ChatGPT
 
     @staticmethod
     def _coerce_series_argument(variable, sub):
