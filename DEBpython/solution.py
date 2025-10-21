@@ -3,7 +3,7 @@ from copy import deepcopy
 from types import SimpleNamespace
 
 import numpy as np
-from scipy.integrate import simpson
+from scipy.integrate import simpson, cumulative_trapezoid, cumulative_simpson
 from typing import List
 
 from DEBpython.state import State
@@ -464,7 +464,59 @@ class TimeIntervalSol(MutableSequence):
 
         return res
 
-    # TODO: cumulative integration method. Check implementation by ChatGPT
+    def cumulative_integral(self, variable, start=None, stop=None, *, method='simpson', include_start=True):
+        """Return the running integral of a series over time.
+
+        Parameters
+        ----------
+        variable : str | array-like | callable
+            Same semantics as in ``integrate``.
+        start, stop : int | float | None
+            Optional bounds; indices use grid slicing, floats use time window with interpolated endpoints.
+        method : {'trapz', 'simpson'}, default 'simpson'
+            Cumulative rule. ``'trapz'`` uses SciPy's ``cumulative_trapezoid``; ``'simpson'`` uses
+            SciPy's ``cumulative_simpson``.
+        include_start : bool, default True
+            If True, the first element corresponds to zero area at the first time (length = T_sub).
+            If False, the first element corresponds to the first *interval* area (length = T_sub - 1).
+        """
+        # ---- Select sub-interval ------------------------------------------
+        sub = self
+        if start is not None or stop is not None:
+            if (isinstance(start, (int, np.integer)) or start is None) and (
+                    isinstance(stop, (int, np.integer)) or stop is None):
+                sub = self[slice(start, stop)]
+            elif (isinstance(start, (float, np.floating)) or start is None) and (
+                    isinstance(stop, (float, np.floating)) or stop is None):
+                s = float(start) if start is not None else float(self.t[0])
+                e = float(stop) if stop is not None else float(self.t[-1])
+                sub = self.window(s, e, include_end=True)
+            else:
+                raise TypeError("start/stop must both be indices (int) or both be times (float), or None.")
+
+        # ---- Build the series on the chosen sub-interval -------------------
+        y = self._coerce_series_argument(variable, sub)
+        y = np.asarray(y)
+        t = np.asarray(sub.t)
+        n = len(t)
+        if y.shape[0] != n:
+            raise ValueError(
+                f"Series length {y.shape[0]} does not match sub-interval time grid length {n}. "
+                "Pass an attribute name or callable to evaluate on the sub-interval, or resample accordingly."
+            )
+
+        if method == 'trapz':
+            cum = cumulative_trapezoid(y=y, x=t, axis=0)
+        elif method == 'simpson':
+            cum = cumulative_simpson(y=y, x=t, axis=0)
+        else:
+            raise ValueError("method must be 'trapz' or 'simpson'.")
+
+        if include_start:
+            zero = np.zeros((1,) + tuple(cum.shape[1:]), dtype=cum.dtype)
+            return np.concatenate([zero, cum], axis=0)
+        else:
+            return cum
 
     @staticmethod
     def _coerce_series_argument(variable, sub):
