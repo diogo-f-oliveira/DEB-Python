@@ -60,6 +60,7 @@ class State:
             return valid, reason
         for i, (var, val) in enumerate(zip(self.STATE_VARS, state_values)):
             if not isinstance(val, self.STATE_VARS[var]):
+                # TODO: Try to convert value to type of state variable. For float states, it should work for int inputs
                 valid = False
                 reason = (f'State value {val} is not of the defined type for state variable {var} '
                           f'({self.STATE_VARS[var]}).')
@@ -101,7 +102,13 @@ class State:
     def at_fertilization(cls, organism):
         return cls.from_state_values((organism.E_0, organism.V_0, 0., 0.))
 
-
+    @classmethod
+    def fully_grown(cls, organism, f=1, E_R=0):
+        E = organism.E_m * organism.L_inf(f) ** 3
+        V = organism.L_inf(f) ** 3
+        E_H = organism.E_Hp,
+        E_R = E_R
+        return cls.from_state_values((E, V, E_H, E_R))
 
 
 class ABJState(State):
@@ -117,6 +124,7 @@ class ABJState(State):
         'p_X': float,
         'food_comp': Compound.food,
     }
+
     @classmethod
     def at_fertilization(cls, organism):
         return cls.from_state_values((organism.E_0, organism.V_0, 0., 0., 1.))
