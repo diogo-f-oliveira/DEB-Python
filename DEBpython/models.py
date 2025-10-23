@@ -23,22 +23,12 @@ class STD:
 
     MAX_STEP_SIZE = 1  # Maximum step size during integration of state equations, in days
 
-    def __init__(self, organism: Pet, env: Environment):
+    def __init__(self, organism: Pet, env: Environment = None):
         """Takes as input a Pet class or a dictionary of parameters to create a Pet class."""
-
-        # Check that organism is a Pet class
-        if not isinstance(organism, Pet):
-            raise Exception("Input must be of class Pet or a dictionary of parameters used to create a Pet class.")
-        # Check that state is a State class
-        if not isinstance(organism.state, State):
-            raise Exception("Pet must have a state of type State to run this model.")
-        self.filter_pet(organism)
-        self.organism = organism
-        self.state = organism.state
-        # self.lifestage_transitions = None
         self.lifestage_transitions = None
-        self.set_lifestage_transitions()
-
+        self.state = None
+        self.organism = None
+        self.set_pet(organism)
         # Add env
         self.env = env
 
@@ -46,12 +36,24 @@ class STD:
         self.sol = None  # Full solution including powers, fluxes and entropy
 
     @staticmethod
-    def filter_pet(organism):
+    def filter_pet(organism: Pet):
         """Ensures that the parameters of the organism are valid."""
         # Check validity of parameters of Pet
         valid, reason = organism.check_validity()
         if not valid:
             raise Exception(f"Invalid Pet parameters. {reason}")
+
+    def set_pet(self, organism):
+        # Check that organism is a Pet class
+        self.organism = organism
+        if not isinstance(organism, Pet):
+            raise Exception("Input must be of class Pet or a dictionary of parameters used to create a Pet class.")
+        # Check that state is a State class
+        if not isinstance(organism.state, State):
+            raise Exception("Pet must have a state of type State to run this model.")
+        self.filter_pet(organism)
+        self.state = organism.state
+        self.set_lifestage_transitions()
 
     def set_lifestage_transitions(self):
         self.lifestage_transitions = {
@@ -132,23 +134,26 @@ class STD:
         state_at_transition.E_H *= (1 + 1e-6)
         return success, state_at_transition
 
-    # TODO: Update method to work with Environment and State paradigm
-    def fully_grown(self, f=1, E_R=0):
+    def fully_grown(self, simulation_time=5000, env=None, initial_state=None):
+        # TODO: Update the docstring
         """
         Returns a TimeInstantSol of the organism at full growth for a given food level and reproduction buffer
         :param f: scaled functional feeding response f
         :param E_R: reproduction buffer E_R
         :return: TimeInstantSol of the organism at full growth
         """
-        # Create food function
-        self.food_function = lambda t: f
+        if initial_state is None:
+            initial_state = self.state.__class__.at_fertilization(self.organism)
+        if env is None:
+            env = ConstantEnvironment(pet=self.organism, temp=self.organism.T_typical)
 
-        # State variables at full growth
-        state_vars = (self.organism.E_m * (self.organism.L_inf(f)) ** 3,
-                      (self.organism.L_inf(f)) ** 3,
-                      self.organism.E_Hp,
-                      E_R)
-        return TimeInstantSol(self, 0, state_vars)
+        # Create model for internal simulation
+        model = self.__class__(organism=self.organism, env=env)
+
+        # Simulate until event occurs
+        sol = model.simulate(initial_state=initial_state, t_span=(0, simulation_time))
+
+        return sol[-1]
 
     def state_changes(self, t, state_vars):
         """
@@ -336,11 +341,11 @@ class STX(STD):
         (f) over time.
     """
 
-    def filter_pet(self, organism):
+    def filter_pet(self, organism: Pet):
         """Ensures that the parameters of Pet are valid and that the required parameters for model STX, t_0 and E_Hx,
         are defined."""
         # Checks validity of parameters of Pet
-        super().filter_pet(organism)
+        super().filter_pet(organism=organism)
 
         # Check that the Pet class has parameters t_0 and E_Hx defined
         if not hasattr(organism, 't_0') or not hasattr(organism, 'E_Hx'):
@@ -478,7 +483,7 @@ class STX(STD):
 
 
 class RUM(STX):
-    def __init__(self, organism: Ruminant, env: Environment):
+    def __init__(self, organism: Ruminant, env: Environment = None):
         """Takes as input a Ruminant class or a dictionary of parameters to create a Pet class."""
 
         # Check that organism is a Ruminant class
@@ -535,8 +540,8 @@ class RUM(STX):
 
 
 class ABJ(STD):
-    def __init__(self, organism: Pet, env: Environment):
-        super().__init__(organism, env)
+    def __init__(self, organism: Pet, env: Environment = None):
+        super().__init__(organism=organism, env=env)
         if not isinstance(organism.state, ABJState):
             raise Exception("Pet must have a state of type ABJState to run this model.")
 
