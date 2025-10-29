@@ -25,7 +25,7 @@ class Pet:
     temperature_affected = ('p_Am', 'v', 'p_M', 'p_T', 'k_J')
     T_REF = 293.15  # Reference temperature (K)
     # TODO: Set generalized animal parameter values as defaults
-    def __init__(self, *, p_Am, kap, v, p_M, E_G, k_J, E_Hb, E_Hp, kap_R, state=None, comp=None, p_T=0, kap_X=0.8,
+    def __init__(self, *, p_Am, kap, v, p_M, E_G, E_Hb, E_Hp, k_J=0.002, kap_R=0.95, state=None, comp=None, p_T=0, kap_X=0.8,
                  kap_P=0.1, T_typical=T_REF, E_0=1e6, V_0=1e-10, T_A=8000, del_M=1, **additional_parameters):
 
         # Parameters
@@ -367,7 +367,7 @@ class Ruminant(Pet):
         assimilation reaction is an average of both sub transformations, weighted by the parameter xi_C.
         """
 
-    def __init__(self, *, p_Am, kap, v, p_M, E_G, k_J, E_Hb, E_Hp, kap_R, xi_C, comp=None, p_T=0, kap_X=0.8,
+    def __init__(self, *, p_Am, kap, v, p_M, E_G, E_Hb, E_Hp, xi_C, comp=None, p_T=0, k_J=0.002, kap_R=0.95, kap_X=0.8,
                  kap_P=0.1, E_0=1e6, V_0=1e-10, T_A=8000, T_ref=293.15, T_typical=298.15, del_M=1,
                  **additional_parameters):
 
@@ -478,5 +478,8 @@ animals = {
     'Danio_rerio': dict(E_G=5267.41, p_Am=150.724, v=0.0196, p_M=243.001, kap=0.35756, k_J=0.002, kap_R=0.95,
                         E_Hb=0.7925, E_Hj=37.26, E_Hp=2361, E_0=1.81032, T_typical=273.15, del_M=0.14246,
                         comp=Composition.standard(n_waste='ammonia', d=0.2)),
+    'Moschiola_meminna': dict(E_G=7844, p_Am=2289.55, v=0.02249, p_M=257.1827, kap=0.87095, k_J=0.0095457,
+                               E_Hb=8.057e+04, E_Hp=7.898e+05, E_Hx=3.399e+05, t_0=35.7838, f_milk=2.9939,
+                               kap_X=0.6, kap_P=0.3, T_typical=311.75),
 
 }
